@@ -5,7 +5,8 @@
 #         data/reference/population_ch_bfs.csv
 # Output: data/processed/flu_weekly_national.csv   (one row per ISO week)
 #         data/processed/flu_weekly_strata_long.csv (breakdowns for 4.2)
-#         output/qc/qc_checks.csv, output/qc/*.csv  (quality checks)
+#         output/qc/qc_checks.csv, output/qc/*.csv  (quality checks,
+#         incl. levels_overview.csv = geographic/demographic levels)
 # Run   : Rscript scripts/01_data_preparation.R   (from the project root)
 # =============================================================================
 source("R/setup.R")
@@ -68,9 +69,12 @@ inc_bag <- oblig |>
   dplyr::right_join(dplyr::select(national, iso_week, oblig_inc_100k), by = "iso_week")
 max_diff <- max(abs(inc_bag$oblig_inc_100k - inc_bag$inc_bag))
 n_fallback <- sum(national$sentinella_source == "regional_weighted_mean", na.rm = TRUE)
+levels <- levels_overview(strata)
+readr::write_csv(levels, file.path(PATH_QC, "levels_overview.csv"))
 n_expected <- length(iso_week_seq(STUDY_START_ISOWEEK, STUDY_END_ISOWEEK))
 qc <- dplyr::bind_rows(
   qc,
+  qc_levels(levels),
   qc_row("final_1", "national", "One row per ISO week in study period",
          nrow(national) == n_expected && !anyDuplicated(national$iso_week),
          sprintf("%d rows, %d expected (%s to %s)", nrow(national), n_expected,

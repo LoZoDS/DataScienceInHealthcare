@@ -115,6 +115,38 @@ missing_ov |>
                format.args = list(big.mark = ","))
 ```
 
+**Geographic and demographic levels.** Every stratification has the expected
+levels (26 cantons + `unknown`, 5 age groups + `unknown`, female/male/`unknown`,
+6 Sentinella regions + `unknown`). In the mandatory reporting system the share
+of cases with unknown canton, age group, sex or type is below 1 % (check
+`levels_1`). The Sentinella `unknown` strata are empty placeholders.
+
+```{r levels}
+levels_ov <- readr::read_csv(file.path(PATH_QC, "levels_overview.csv"), show_col_types = FALSE)
+levels_ov |>
+  dplyr::filter(dimension != "canton" | level == "unknown") |>
+  dplyr::mutate(total = round(total)) |>
+  dplyr::select(system, dimension, level, total, pct_of_total) |>
+  knitr::kable(col.names = c("System", "Stratification", "Level",
+                             "Total 2013-W01 to 2026-W37", "% of stratification"),
+               format.args = list(big.mark = ","))
+```
+
+Cantons (shares of all reported cases in Switzerland):
+
+```{r cantons, results = "asis"}
+levels_ov |>
+  dplyr::filter(dimension == "canton") |>
+  dplyr::arrange(dplyr::desc(total)) |>
+  dplyr::mutate(label = sprintf("%s %.1f%%", level, pct_of_total)) |>
+  dplyr::pull(label) |>
+  paste(collapse = ", ") |>
+  cat()
+```
+
+Totals for Sentinella are extrapolated ILI consultations. Regional variation is
+only described (Section 4.2), not used in the forecasting models.
+
 Missing `pop`/`incValue` in the raw Oblig file occur only in `unknown`
 strata, in the 10-year reference curves and for Liechtenstein in some weeks;
 none of these enter the national series.
@@ -229,4 +261,5 @@ test seasons.
 | `data/processed/flu_weekly_national.csv` | one row per ISO week, both systems, population, flags (see `docs/data_dictionary.md`) |
 | `data/processed/flu_weekly_strata_long.csv` | all breakdowns (canton, Sentinella region, age group, sex, type) in long format for 4.2 |
 | `output/qc/qc_checks.csv` | all quality checks |
+| `output/qc/levels_overview.csv` | totals and shares per canton, Sentinella region, age group, sex, type |
 | `output/qc/season_summary.csv` | peaks per season, onset/end where a threshold is available |

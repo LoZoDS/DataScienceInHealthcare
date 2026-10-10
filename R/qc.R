@@ -144,6 +144,44 @@ qc_sentinella_fallback <- function(sent) {
                  nrow(cmp), stats::median(d), max(d), r))
 }
 
+# ---- Geographic and demographic levels (Section 4.1) ---------------------------
+
+#' Overview of all levels per stratification: cases / ILI consultations and
+#' share within the stratification, study period
+levels_overview <- function(strata) {
+  strata |>
+    dplyr::group_by(system, dimension, level) |>
+    dplyr::summarise(total = sum(count, na.rm = TRUE),
+                     weeks_with_value = sum(!is.na(count)),
+                     .groups = "drop_last") |>
+    dplyr::mutate(pct_of_total = round(100 * total / sum(total), 2)) |>
+    dplyr::ungroup()
+}
+
+#' Share of cases with unknown canton / age group / sex / type must be small
+qc_levels <- function(levels, max_unknown_pct = 1) {
+  unk <- dplyr::filter(levels, level == "unknown")
+  ob  <- dplyr::filter(unk, system == "oblig")
+  se  <- dplyr::filter(unk, system == "sentinella")
+  n_levels <- levels |> dplyr::count(system, dimension)
+  dplyr::bind_rows(
+    qc_row("levels_1", "oblig",
+           sprintf("Share 'unknown' < %g%% in every stratification", max_unknown_pct),
+           all(ob$pct_of_total < max_unknown_pct),
+           paste(sprintf("%s %.2f%%", ob$dimension, ob$pct_of_total), collapse = ", ")),
+    qc_row("levels_2", "sentinella", "Info: 'unknown' strata contain no values",
+           TRUE, paste(sprintf("%s: %d weeks with value", se$dimension, se$weeks_with_value),
+                       collapse = ", ")),
+    qc_row("levels_3", "both", "Expected number of levels per stratification",
+           all(n_levels$n[n_levels$dimension == "canton"] == 27,
+               n_levels$n[n_levels$dimension == "agegroup"] == 6,
+               n_levels$n[n_levels$dimension == "sex"] == 3,
+               n_levels$n[n_levels$dimension == "sentinella_region"] == 7),
+           paste(sprintf("%s/%s: %d", n_levels$system, n_levels$dimension, n_levels$n),
+                 collapse = ", "))
+  )
+}
+
 #' Stop the pipeline if any check failed
 assert_qc <- function(qc) {
   failed <- dplyr::filter(qc, result == "FAIL")
