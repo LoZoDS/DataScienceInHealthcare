@@ -1,0 +1,19 @@
+# Permanent resident population of Switzerland on 31 December (Staendige Wohnbevoelkerung).
+# Source: Swiss Federal Statistical Office (BFS), STATPOP, "Bilanz der staendigen Wohnbevoelkerung, 1861-2025".
+# 2024 and 2025 cross-checked against the BFS press release on the definitive 2025 results (20.08.2026).
+# All years are identical to the `pop` column of the FOPH/BAG INFLUENZA_oblig export (checked in the QC step).
+# Population of year t is used for all ISO weeks of ISO year t; 2026 uses 2025 (latest available).
+year,population,source
+2013,8139631,BFS STATPOP
+2014,8237666,BFS STATPOP
+2015,8327126,BFS STATPOP
+2016,8419550,BFS STATPOP
+2017,8484130,BFS STATPOP
+2018,8544527,BFS STATPOP
+2019,8606033,BFS STATPOP
+2020,8670300,BFS STATPOP
+2021,8738791,BFS STATPOP
+2022,8815385,BFS STATPOP
+2023,8962258,BFS STATPOP
+2024,9051029,BFS STATPOP
+2025,9127125,BFS STATPOP

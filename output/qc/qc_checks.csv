@@ -1,0 +1,26 @@
+id,dataset,description,result,detail
+vintage_1,oblig,Observations = Preliminary Study (Section 3),PASS,"30,938 x 20 after restriction to <= 2026-W37 (raw file: 31,073 rows); study: 30,938 x 20"
+vintage_2,sentinella,Observations = Preliminary Study (Section 3),PASS,"12,332 x 20 after restriction to <= 2026-W37 (raw file: 12,383 rows); study: 12,332 x 20"
+oblig_S1,oblig,No duplicated keys,PASS,"0 duplicated rows on (valueCategory, temporal, georegion, agegroup, sex, type)"
+oblig_S2,oblig,Weekly series has no missing ISO weeks,PASS,"2013-W01 to 2026-W37, 715 weeks, missing: none"
+oblig_S3,oblig,All rows flagged dataComplete = TRUE,PASS,0 rows not complete
+sentinella_S1,sentinella,No duplicated keys,PASS,"0 duplicated rows on (valueCategory, temporal, georegion, agegroup, sex)"
+sentinella_S2,sentinella,Weekly series has no missing ISO weeks,PASS,"2013-W01 to 2026-W37, 715 weeks, missing: none"
+sentinella_S3,sentinella,All rows flagged dataComplete = TRUE,PASS,0 rows not complete
+oblig_C1,oblig,CH + FL = CHFL national total,PASS,715 / 715 weeks equal
+oblig_C2,oblig,Sum of cantons (incl. 'unknown') = CH,PASS,715 / 715 weeks equal
+oblig_C3,oblig,Sum of age groups (incl. 'unknown') = CHFL,PASS,715 / 715 weeks equal
+oblig_C4,oblig,Sum of sexes (incl. 'unknown') = CHFL,PASS,715 / 715 weeks equal
+oblig_C5,oblig,Sum of types A + B + unknown = CHFL,PASS,715 / 715 weeks equal
+oblig_C6,oblig,BAG `pop` column equals BFS reference population,PASS,13 of 13 years identical
+oblig_C7,oblig,No negative case counts,PASS,0 negative values
+sent_C1,sentinella,National ILI rate (CH) available for every week,WARN,missing weeks: 2020-W11 2020-W12
+sent_C2,sentinella,Info: regional values are extrapolated separately (not additive) -> national row used,PASS,median |sum(regions) - CH| / CH = 5.1%
+sent_C3,sentinella,"incValue = value / population x 100,000 (plausible population 7.5-9.5 Mio.)",PASS,implied population 8.14 to 9.13 Mio.
+sent_C4,sentinella,No negative ILI values,PASS,
+sent_C5,sentinella,Weighted mean of regions reproduces national ILI rate (validates fallback),PASS,"713 weeks; abs diff per 1,000 consultations: median 0.025, max 0.56; r = 1.0000"
+final_1,national,One row per ISO week in study period,PASS,"715 rows, 715 expected (2013-W01 to 2026-W37)"
+final_2,national,Target (oblig incidence) complete,PASS,0 missing weeks
+final_3,national,Own incidence (cantons summed / BFS) = FOPH/BAG incidence,PASS,max abs diff 0.0050 (FOPH/BAG rounds to 2 decimals)
+final_4,national,Sentinella ILI rate complete in study period,WARN,missing (national and all regions): 2020-W11 2020-W12; filled by regional weighted mean: 0 weeks
+final_5,national,Leakage-prone BAG columns excluded,PASS,"trend, deltaValue, deltaIncValue, incValuePrctChange, valueMean5y, inc14d"

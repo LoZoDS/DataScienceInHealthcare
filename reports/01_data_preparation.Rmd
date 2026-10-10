@@ -1,0 +1,232 @@
+---
+title: "WP 4.1 – Data Preparation"
+subtitle: "From Surveillance to Prediction: Forecasting Weekly Influenza Activity in Switzerland"
+author: "L. Zovkic (responsible), S. Ryf (feedback)"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  github_document:
+    toc: true
+    fig_width: 9
+    fig_height: 5
+    dev: png
+    df_print: kable
+---
+
+```{r setup, include = FALSE}
+knitr::opts_knit$set(root.dir = normalizePath(".."))
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, dpi = 150,
+                      fig.path = "figures/01_")
+```
+
+```{r load}
+source("R/setup.R")
+oblig_raw  <- load_oblig()
+sent_raw   <- load_sentinella()
+oblig      <- restrict_to_study_vintage(oblig_raw)
+sent       <- restrict_to_study_vintage(sent_raw)
+national   <- readr::read_csv(file.path(PATH_PROCESSED, "flu_weekly_national.csv"), show_col_types = FALSE)
+qc         <- readr::read_csv(file.path(PATH_QC, "qc_checks.csv"), show_col_types = FALSE)
+seasons    <- readr::read_csv(file.path(PATH_QC, "season_summary.csv"), show_col_types = FALSE)
+missing_ov <- readr::read_csv(file.path(PATH_QC, "missing_values.csv"), show_col_types = FALSE)
+
+COL_OBLIG <- "#2a78d6"  # categorical slot 1
+COL_SENT  <- "#eb6834"  # categorical slot 2
+theme_set(theme_minimal(base_size = 11) +
+  theme(panel.grid.minor = element_blank(),
+        panel.grid.major.x = element_blank(),
+        plot.title.position = "plot",
+        strip.text = element_text(face = "bold", hjust = 0)))
+```
+
+This report documents work package 4.1 of the Preliminary Study. It is generated
+by `scripts/01_data_preparation.R` (data) and this file (report); every number
+below is computed, not typed. All steps follow Sections 3 and 4.1 of the
+Preliminary Study; where the raw data required an interpretation, it is stated
+in section 4 of this report.
+
+# 1 Data and vintage
+
+| Source | File | Observations × variables | Weeks |
+|---|---|---|---|
+| FOPH/BAG mandatory reporting ("Oblig") | `INFLUENZA_oblig.csv` | `r format(nrow(oblig), big.mark = ",")` × `r ncol(oblig)` | `r STUDY_START_ISOWEEK` – `r STUDY_END_ISOWEEK` |
+| FOPH/BAG Sentinella | `INFLUENZA_sentinella.csv` | `r format(nrow(sent), big.mark = ",")` × `r ncol(sent)` | `r STUDY_START_ISOWEEK` – `r STUDY_END_ISOWEEK` |
+| BFS STATPOP | `population_ch_bfs.csv` | 13 years | 2013 – 2025 (2025 used for 2026) |
+
+**Vintage.** The Preliminary Study uses the FOPH/BAG download of 24 September
+2026 (study period 2013-W01 to 2026-W37). The raw files in this repository were
+downloaded later and additionally contain 2026-W38 to W40
+(`r format(nrow(oblig_raw), big.mark = ",")` / `r format(nrow(sent_raw), big.mark = ",")` rows).
+Directly after loading, all weekly rows after `r STUDY_END_ISOWEEK` are removed.
+This reproduces **exactly** the observations reported in the study
+(30,938 × 20 and 12,332 × 20; checks `vintage_1`, `vintage_2`). Values of earlier
+weeks can still differ marginally through backfilling; this cannot be checked
+without the original file (limitation already stated in Section 4.4 of the study).
+
+# 2 Structure of the raw files
+
+Each observation is a week × region × age group × sex stratum (Section 3). The
+strata are organised as several stratifications side by side: each row breaks
+down at most one dimension (canton/Sentinella region, age group, sex, or
+influenza type), the others are set to `all`. In addition there are national
+totals, monthly and yearly values and (Oblig only) three FOPH/BAG 10-year
+reference curves.
+
+```{r structure}
+readr::read_csv(file.path(PATH_QC, "structure_overview.csv"), show_col_types = FALSE) |>
+  dplyr::filter(temporal_type %in% c("iso_week", "week")) |>
+  knitr::kable(col.names = c("Dataset", "valueCategory", "Time unit", "Geo level", "Breakdown", "Rows"),
+               format.args = list(big.mark = ","))
+```
+
+**Implementation of "summed across strata" (Section 3).** Cases are summed
+within one complete stratification, the cantons (26 cantons + `unknown`), to
+national weekly counts for Switzerland. Summing over *all* rows would count each
+case several times, because the stratifications overlap. All stratifications add
+up exactly to the same national total (checks `oblig_C1`–`oblig_C5`), so the
+choice of stratification does not affect the result.
+
+**Implementation of the national Sentinella rate (Section 3).** The national
+rate is taken from the national values in the dataset. The fallback "weighted
+mean of the regional rates" is implemented (weights: number of consultations per
+region); it reproduces the national values almost exactly (check `sent_C5`). It
+is not needed in practice: in the two weeks without a national value
+(2020-W11, W12) the regional values are missing as well.
+
+# 3 Quality checks
+
+Section 4.1: structure, time coverage, geographic and demographic levels,
+missing values, completeness and duplicates.
+
+```{r qc}
+qc |> dplyr::select(id, description, result, detail) |>
+  knitr::kable(col.names = c("ID", "Check", "Result", "Detail"))
+```
+
+**Missing values.** The target has no missing weeks. The Sentinella ILI rate is
+missing for **2020-W11 and 2020-W12** (start of the COVID-19 lockdown), nationally
+and in all regions. These weeks lie in the training period of every forecast
+origin; they are kept as `NA` and flagged (`sentinella_missing`). Their handling
+in the models (e.g. interpolation of the lagged predictor) is decided in WP 4.4.
+
+```{r missing}
+missing_ov |>
+  dplyr::filter(column %in% c("value", "pop", "incValue", "prctConsultations")) |>
+  knitr::kable(col.names = c("Dataset", "Column", "Missing", "Rows", "% missing"),
+               format.args = list(big.mark = ","))
+```
+
+Missing `pop`/`incValue` in the raw Oblig file occur only in `unknown`
+strata, in the 10-year reference curves and for Liechtenstein in some weeks;
+none of these enter the national series.
+
+# 4 Implementation of the Preliminary Study
+
+| Study (section) | Implementation | Check |
+|---|---|---|
+| Study period 2013-W01 to 2026-W37 (3) | weekly rows after 2026-W37 removed after loading | `vintage_1/2`, `final_1` |
+| Target: weekly national incidence of lab-confirmed influenza per 100,000 (3) | `oblig_inc_100k` = cases summed over cantons / BFS population × 100,000 | `final_3`: identical to FOPH/BAG incidence up to rounding |
+| BFS population of the respective year, 2025 for 2026 (3) | `population`, 31 December of the ISO year | `oblig_C6`: identical to FOPH/BAG `pop` |
+| Sentinella ILI consultations per 1,000 consultations (3) | `sentinella_ili_rate` = national `prctConsultations` × 10 | – |
+| National Sentinella rate from national values, else weighted regional mean (3) | `sentinella_source` documents the origin per week | `sent_C5` |
+| Predictors: lagged target, lagged Sentinella rate, calendar week (3) | `oblig_inc_100k`, `sentinella_ili_rate`, `iso_wk`; lags are created in WP 4.4 | – |
+| Region, age group, sex only for aggregation and descriptives (3) | separate file `flu_weekly_strata_long.csv` | – |
+| No predictors with information from the prediction period (4.1) | FOPH/BAG `trend`, `delta*`, `valueMean5y`, `inc14d`, 10-year curves dropped | `final_5` |
+| COVID-19 seasons 2020/21 and 2021/22 flagged (4.1) | `covid_season` | tests |
+| Post-2020 indicator; pre-2020 = 2013/14–2019/20, post-2020 = 2022/23–2025/26 (4.1) | `post2020`, `period` | tests |
+| Seasons W40–W39, test seasons 2023/24–2025/26 (4.5) | `season`, `season_week`, `test_season` | tests |
+| Season onset: Sentinella ILI rate above the FOPH/BAG epidemic threshold (4.2) | `sentinella_ili_inc` (per 100,000 inhabitants, the scale of the FOPH/BAG threshold) and `season_boundaries()` prepared | see section 7 |
+
+Interpretation needed: Switzerland without Liechtenstein, because the BFS
+denominator refers to Switzerland (Liechtenstein =
+`r round(100 * sum(oblig$value[oblig$georegion == "FL" & oblig$temporal_type == "iso_week"]) / sum(oblig$value[oblig$georegion == "CHFL" & oblig$agegroup == "all" & oblig$sex == "all" & oblig$type == "all" & oblig$valueCategory == "cases" & oblig$temporal_type == "iso_week"]), 2)` %
+of all reported cases).
+
+# 5 First look at the national series
+
+```{r fig-series, fig.height = 6}
+long <- national |>
+  dplyr::select(week_start, season, covid_season,
+                `Mandatory reporting - lab-confirmed cases per 100,000 population` = oblig_inc_100k,
+                `Sentinella - ILI consultations per 1,000 consultations` = sentinella_ili_rate) |>
+  tidyr::pivot_longer(-c(week_start, season, covid_season), names_to = "system", values_to = "value")
+covid_rect <- national |> dplyr::filter(covid_season) |>
+  dplyr::summarise(xmin = min(week_start), xmax = max(week_start) + 6)
+test_rect <- national |> dplyr::filter(test_season) |>
+  dplyr::summarise(xmin = min(week_start), xmax = max(week_start) + 6)
+ggplot(long, aes(week_start, value, colour = system)) +
+  geom_rect(data = covid_rect, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf),
+            inherit.aes = FALSE, fill = "grey85", alpha = 0.6) +
+  geom_rect(data = test_rect, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf),
+            inherit.aes = FALSE, fill = "#cde2fb", alpha = 0.5) +
+  geom_line(linewidth = 0.5, na.rm = TRUE) +
+  facet_wrap(~ system, ncol = 1, scales = "free_y") +
+  scale_colour_manual(values = c(COL_OBLIG, COL_SENT), guide = "none") +
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y") +
+  labs(x = NULL, y = NULL,
+       title = "Weekly influenza activity in Switzerland, 2013-W01 to 2026-W37",
+       caption = "Grey: COVID-19 seasons 2020/21 and 2021/22. Light blue: test seasons 2023/24 to 2025/26. Source: FOPH/BAG, BFS.")
+```
+
+```{r fig-ratio, fig.height = 4}
+ratio <- national |>
+  dplyr::filter(season != "2012/13") |>
+  dplyr::group_by(season, period) |>
+  dplyr::summarise(ratio = 100 * sum(oblig_inc_100k) / sum(sentinella_ili_inc, na.rm = TRUE),
+                   .groups = "drop")
+ggplot(ratio, aes(season, ratio, fill = period == "covid")) +
+  geom_col(width = 0.7) +
+  scale_fill_manual(values = c(`FALSE` = COL_OBLIG, `TRUE` = "grey70"), guide = "none") +
+  geom_text(aes(label = sprintf("%.1f", ratio)), vjust = -0.4, size = 3.2, colour = "#52514e") +
+  labs(x = NULL, y = "Lab-confirmed cases\nper 100 ILI consultations",
+       title = "Lab-confirmed cases relative to ILI consultations, by season",
+       subtitle = "Grey: COVID-19 seasons. The ratio drifts upwards and rises sharply after 2020.")
+```
+
+```{r ratio-numbers}
+pre  <- mean(ratio$ratio[ratio$period == "pre2020"])
+post <- mean(ratio$ratio[ratio$period == "post2020"])
+```
+
+**Observation relevant for 4.3/4.4.** Per 100 ILI consultations, the mandatory
+reporting system recorded on average `r sprintf("%.1f", pre)` lab-confirmed
+cases in 2013/14–2019/20 and `r sprintf("%.1f", post)` in 2022/23–2025/26 (factor
+`r sprintf("%.1f", post / pre)`); the ratio already drifts upwards before 2020.
+This is consistent with the change in testing behaviour anticipated in Section
+4.1 and supports the planned post-2020 indicator and the separate lag analysis
+for pre- and post-2020 seasons. In addition, ILI is a *syndromic* measure: from
+2020 onwards it also captures COVID-19 and other respiratory viruses (visible as
+the ILI rise in autumn 2020 with almost no influenza cases).
+
+# 6 Season overview
+
+```{r seasons}
+seasons |>
+  dplyr::select(season, period, n_weeks, oblig_cases, oblig_peak_week, oblig_peak_inc,
+                ili_peak_week, ili_peak_rate) |>
+  knitr::kable(col.names = c("Season", "Period", "Weeks", "Cases", "Peak week (Oblig)",
+                             "Peak incidence (Oblig)", "Peak week (Sentinella)",
+                             "Peak ILI per 1,000 consultations"),
+               format.args = list(big.mark = ","))
+```
+
+2012/13 starts in W01 (study start) and 2025/26 ends in W37 (study end), so both
+are incomplete; for 2025/26 only the two off-season weeks W38–W39 are missing.
+Peak week and peak intensity are formally analysed in WP 4.2.
+
+# 7 Open issues for the team
+
+See `docs/open_issues.md`. Most important: FOPH/BAG has **not published an ILI
+epidemic threshold since season 2020/21** (since 2023/24 the epidemic period is
+defined by 10 % test positivity, which is not in our data). The season onset
+definition of Section 4.2 can therefore only be applied to seasons with a
+published threshold and needs a team decision for the others, including all
+test seasons.
+
+# 8 Output files
+
+| File | Content |
+|---|---|
+| `data/processed/flu_weekly_national.csv` | one row per ISO week, both systems, population, flags (see `docs/data_dictionary.md`) |
+| `data/processed/flu_weekly_strata_long.csv` | all breakdowns (canton, Sentinella region, age group, sex, type) in long format for 4.2 |
+| `output/qc/qc_checks.csv` | all quality checks |
+| `output/qc/season_summary.csv` | peaks per season, onset/end where a threshold is available |
