@@ -54,7 +54,7 @@ in section 4 of this report.
 
 **Vintage.** The Preliminary Study uses the FOPH/BAG download of 24 September
 2026 (study period 2013-W01 to 2026-W37). The raw files in this repository were
-downloaded later and additionally contain 2026-W38 to W40
+downloaded on 10 October 2026 and additionally contain 2026-W38 to W40
 (`r format(nrow(oblig_raw), big.mark = ",")` / `r format(nrow(sent_raw), big.mark = ",")` rows).
 Directly after loading, all weekly rows after `r STUDY_END_ISOWEEK` are removed.
 This reproduces **exactly** the observations reported in the study

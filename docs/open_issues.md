@@ -23,7 +23,7 @@ Sentinella ILI also captures SARS-CoV-2 and other respiratory viruses (ILI rose 
 
 ## 4. Data vintage  — resolved as far as possible
 
-The raw files are a later download (up to 2026-W40) than the one in the study (24.09.2026). Removing all weeks after 2026-W37 reproduces exactly the 30,938 / 12,332 observations of the study (QC `vintage_1/2`). Values of earlier weeks may differ marginally through backfilling. If someone still has the original files of 24.09., replace them in `data/raw/` and update `DOWNLOAD_INFO.md`; the pipeline stays the same.
+The raw files are a later download (10.10.2026, up to 2026-W40) than the one in the study (24.09.2026). Removing all weeks after 2026-W37 reproduces exactly the 30,938 / 12,332 observations of the study (QC `vintage_1/2`). Values of earlier weeks may differ marginally through backfilling. If someone still has the original files of 24.09., replace them in `data/raw/` and update `DOWNLOAD_INFO.md`; the pipeline stays the same.
 
 ## 5. End of season 2025/26  — small, no action needed
 

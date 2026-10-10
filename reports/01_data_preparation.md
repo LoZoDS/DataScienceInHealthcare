@@ -30,13 +30,14 @@ an interpretation, it is stated in section 4 of this report.
 
 **Vintage.** The Preliminary Study uses the FOPH/BAG download of 24
 September 2026 (study period 2013-W01 to 2026-W37). The raw files in
-this repository were downloaded later and additionally contain 2026-W38
-to W40 (31,073 / 12,383 rows). Directly after loading, all weekly rows
-after 2026-W37 are removed. This reproduces **exactly** the observations
-reported in the study (30,938 × 20 and 12,332 × 20; checks `vintage_1`,
-`vintage_2`). Values of earlier weeks can still differ marginally
-through backfilling; this cannot be checked without the original file
-(limitation already stated in Section 4.4 of the study).
+this repository were downloaded on 10 October 2026 and additionally
+contain 2026-W38 to W40 (31,073 / 12,383 rows). Directly after loading,
+all weekly rows after 2026-W37 are removed. This reproduces **exactly**
+the observations reported in the study (30,938 × 20 and 12,332 × 20;
+checks `vintage_1`, `vintage_2`). Values of earlier weeks can still
+differ marginally through backfilling; this cannot be checked without
+the original file (limitation already stated in Section 4.4 of the
+study).
 
 # 2 Structure of the raw files
 
