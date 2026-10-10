@@ -115,9 +115,53 @@ missing_ov |>
                format.args = list(big.mark = ","))
 ```
 
+**Geographic and demographic levels.** Every stratification has the expected
+levels (26 cantons + `unknown`, 5 age groups + `unknown`, female/male/`unknown`,
+6 Sentinella regions + `unknown`). In the mandatory reporting system the share
+of cases with unknown canton, age group, sex or type is below 1 % (check
+`levels_1`). The Sentinella `unknown` strata are empty placeholders.
+
+```{r levels}
+levels_ov <- readr::read_csv(file.path(PATH_QC, "levels_overview.csv"), show_col_types = FALSE)
+levels_ov |>
+  dplyr::filter(dimension != "canton" | level == "unknown") |>
+  dplyr::mutate(total = round(total)) |>
+  dplyr::select(system, dimension, level, total, pct_of_total) |>
+  knitr::kable(col.names = c("System", "Stratification", "Level",
+                             "Total 2013-W01 to 2026-W37", "% of stratification"),
+               format.args = list(big.mark = ","))
+```
+
+Cantons (shares of all reported cases in Switzerland):
+
+```{r cantons, results = "asis"}
+levels_ov |>
+  dplyr::filter(dimension == "canton") |>
+  dplyr::arrange(dplyr::desc(total)) |>
+  dplyr::mutate(label = sprintf("%s %.1f%%", level, pct_of_total)) |>
+  dplyr::pull(label) |>
+  paste(collapse = ", ") |>
+  cat()
+```
+
+Totals for Sentinella are extrapolated ILI consultations. Regional variation is
+only described (Section 4.2), not used in the forecasting models.
+
 Missing `pop`/`incValue` in the raw Oblig file occur only in `unknown`
 strata, in the 10-year reference curves and for Liechtenstein in some weeks;
 none of these enter the national series.
+
+**Validation against FOPH/BAG publications.** The meaning of the raw Sentinella
+columns is not documented by FOPH/BAG. It was therefore validated against 15
+weekly values that FOPH/BAG published at the time (quoted in media reports and
+HUG bulletins, `data/reference/bag_reported_values.csv`): `prctConsultations` × 10
+matches the published "Grippeverdachtsfälle pro 1000 Konsultationen" and
+`incValue` the published "pro 100 000 Einwohner" (check `sent_V1`). Deviations
+are due to backfilling after the first publication and are largest in the
+holiday weeks around New Year. With the published thresholds, the onset rule of
+Section 4.2 reproduces the onset week reported by FOPH/BAG in 4 of 5 seasons
+(check `sent_V2`); in 2013/14 the value of 2014-W04 was revised from 75 to 72.7
+after publication, so the onset moves from W04 to W05.
 
 # 4 Implementation of the Preliminary Study
 
@@ -134,7 +178,7 @@ none of these enter the national series.
 | COVID-19 seasons 2020/21 and 2021/22 flagged (4.1) | `covid_season` | tests |
 | Post-2020 indicator; pre-2020 = 2013/14–2019/20, post-2020 = 2022/23–2025/26 (4.1) | `post2020`, `period` | tests |
 | Seasons W40–W39, test seasons 2023/24–2025/26 (4.5) | `season`, `season_week`, `test_season` | tests |
-| Season onset: Sentinella ILI rate above the FOPH/BAG epidemic threshold (4.2) | `sentinella_ili_inc` (per 100,000 inhabitants, the scale of the FOPH/BAG threshold) and `season_boundaries()` prepared | see section 7 |
+| Season onset: Sentinella ILI rate above the FOPH/BAG epidemic threshold (4.2) | `sentinella_ili_inc` (per 100,000 inhabitants, the scale of the FOPH/BAG threshold), published thresholds in `epidemic_thresholds.csv`, `season_boundaries()` | `sent_V2`; see section 7 |
 
 Interpretation needed: Switzerland without Liechtenstein, because the BFS
 denominator refers to Switzerland (Liechtenstein =
@@ -215,12 +259,13 @@ Peak week and peak intensity are formally analysed in WP 4.2.
 
 # 7 Open issues for the team
 
-See `docs/open_issues.md`. Most important: FOPH/BAG has **not published an ILI
-epidemic threshold since season 2020/21** (since 2023/24 the epidemic period is
-defined by 10 % test positivity, which is not in our data). The season onset
-definition of Section 4.2 can therefore only be applied to seasons with a
-published threshold and needs a team decision for the others, including all
-test seasons.
+See `docs/open_issues.md`. Most important: published FOPH/BAG thresholds were
+found for 2013/14, 2014/15 and 2016/17 to 2019/20 (not for 2015/16). FOPH/BAG
+has **not published an ILI epidemic threshold since season 2020/21** (since
+2023/24 the epidemic period is defined by 10 % test positivity, which is not in
+our data). The season onset definition of Section 4.2 can therefore not be
+applied to the post-2020 seasons, including all test seasons, and needs a team
+decision.
 
 # 8 Output files
 
@@ -229,4 +274,7 @@ test seasons.
 | `data/processed/flu_weekly_national.csv` | one row per ISO week, both systems, population, flags (see `docs/data_dictionary.md`) |
 | `data/processed/flu_weekly_strata_long.csv` | all breakdowns (canton, Sentinella region, age group, sex, type) in long format for 4.2 |
 | `output/qc/qc_checks.csv` | all quality checks |
+| `output/qc/levels_overview.csv` | totals and shares per canton, Sentinella region, age group, sex, type |
 | `output/qc/season_summary.csv` | peaks per season, onset/end where a threshold is available |
+| `data/reference/epidemic_thresholds.csv` | published FOPH/BAG thresholds with sources |
+| `data/reference/bag_reported_values.csv` | published weekly FOPH/BAG values used for validation |

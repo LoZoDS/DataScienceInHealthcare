@@ -4,14 +4,18 @@ Decisions the team needs to take. Proposed solutions are suggestions from the da
 
 ## 1. Season onset: no FOPH/BAG epidemic threshold after 2019/20  — affects 4.2, 4.5
 
-The study defines season onset as the first of two consecutive weeks in which the Sentinella ILI rate exceeds *the FOPH/BAG epidemic threshold of the respective season*. FOPH/BAG stopped publishing that threshold from 2020/21 onwards ("Auf die Angabe eines epidemischen Schwellenwerts wird seit Saison 2020/21 verzichtet", Sentinella weekly report 47/2021). Since 2023/24 the epidemic period is defined by ≥ 10 % influenza test positivity, which is not in our data. Verified published values so far: 2016/17 = 64, 2018/19 = 68 ILI per 100,000 (`data/reference/epidemic_thresholds.csv`).
+The study defines season onset as the first of two consecutive weeks in which the Sentinella ILI rate exceeds *the FOPH/BAG epidemic threshold of the respective season* (per 100,000 inhabitants; FOPH/BAG: average of the last ten seasons).
 
-Options:
-- **(a) Moving Epidemic Method (MEM)** – derive a threshold for every season from the preceding seasons (R package `mem`; standard method of ECDC/WHO Europe). Consistent, reproducible, uses only past data. *Recommended.*
-- (b) Use the FOPH/BAG test-positivity periods from the annual reports for 2023/24 onwards (week 49–11 for 2023/24, week 50–14 for 2024/25) and published thresholds before 2020 → mixed definitions.
-- (c) One fixed threshold (e.g. mean of published pre-2020 values) → simple, but ignores changes in consultation behaviour.
+- **Found (FOPH/BAG values quoted in media / HUG bulletins):** 2013/14 = 74, 2014/15 = 70, 2016/17 = 64, 2017/18 = 68, 2018/19 = 68, 2019/20 = 69 (`data/reference/epidemic_thresholds.csv`, with sources). With these values the onset rule reproduces the FOPH/BAG-reported onset week in 4 of 5 seasons (QC `sent_V2`).
+- **Not found:** 2015/16.
+- **Not published:** from 2020/21 onwards ("Auf die Angabe eines epidemischen Schwellenwerts wird seit Saison 2020/21 verzichtet", Sentinella weekly report 47/2021, read from a copy on readkong.com). Since 2023/24 FOPH/BAG defines the epidemic period by ≥ 10 % influenza test positivity, which is not in our data.
 
-Also needed: the in-season weeks for the in-season MAE/RMSE in 4.5 depend on this.
+So the rule as written cannot be applied to any post-2020 season, including the three test seasons. Options:
+- **(a) Moving Epidemic Method (MEM)** (Vega et al. 2013, *Influenza Other Respir Viruses*; R package `mem`) – derives a threshold for each season from the preceding seasons; implemented by ECDC in TESSy (2010) and by WHO Europe in EuroFlu (2012). Consistent, reproducible, uses only past data. *Recommended.* Can be validated against the published FOPH/BAG thresholds 2013/14–2019/20.
+- (b) Published FOPH/BAG thresholds where available, carry the last value (69) forward → simple, but not FOPH/BAG's definition after 2020 and ignores the changed consultation level.
+- (c) FOPH/BAG test-positivity periods from the annual reports for 2023/24 onwards (week 49–11 for 2023/24, week 50–14 for 2024/25) → mixed definitions.
+
+The in-season weeks for the in-season MAE/RMSE in 4.5 depend on this decision.
 
 ## 2. Unstable relationship between the two systems  — affects 4.3, 4.4
 

@@ -1,0 +1,56 @@
+system,dimension,level,total,weeks_with_value,pct_of_total
+oblig,agegroup,0 - 4,17092,715,9.74
+oblig,agegroup,15 - 29,16834,715,9.59
+oblig,agegroup,30 - 64,53848,715,30.69
+oblig,agegroup,5 - 14,17495,715,9.97
+oblig,agegroup,65+,70016,715,39.9
+oblig,agegroup,unknown,200,715,0.11
+oblig,canton,AG,11608,715,6.65
+oblig,canton,AI,105,715,0.06
+oblig,canton,AR,447,715,0.26
+oblig,canton,BE,17419,715,9.97
+oblig,canton,BL,6838,715,3.91
+oblig,canton,BS,7841,715,4.49
+oblig,canton,FR,4915,715,2.81
+oblig,canton,GE,17566,715,10.06
+oblig,canton,GL,717,715,0.41
+oblig,canton,GR,3747,715,2.15
+oblig,canton,JU,2673,715,1.53
+oblig,canton,LU,6461,715,3.7
+oblig,canton,NE,3765,715,2.16
+oblig,canton,NW,786,715,0.45
+oblig,canton,OW,513,715,0.29
+oblig,canton,SG,5948,715,3.41
+oblig,canton,SH,1320,715,0.76
+oblig,canton,SO,5626,715,3.22
+oblig,canton,SZ,2407,715,1.38
+oblig,canton,TG,4465,715,2.56
+oblig,canton,TI,11624,715,6.65
+oblig,canton,UR,745,715,0.43
+oblig,canton,VD,21895,715,12.53
+oblig,canton,VS,10019,715,5.74
+oblig,canton,ZG,1735,715,0.99
+oblig,canton,ZH,23400,715,13.4
+oblig,canton,unknown,99,715,0.06
+oblig,sex,female,90821,715,51.75
+oblig,sex,male,83978,715,47.85
+oblig,sex,unknown,686,715,0.39
+oblig,type,A,142682,715,81.31
+oblig,type,B,31383,715,17.88
+oblig,type,unknown,1420,715,0.81
+sentinella,agegroup,0 - 4,302021.3,713,8.95
+sentinella,agegroup,15 - 29,678446.1,713,20.1
+sentinella,agegroup,30 - 64,1589555.4,713,47.1
+sentinella,agegroup,5 - 14,449846,713,13.33
+sentinella,agegroup,65+,354690.8,713,10.51
+sentinella,agegroup,unknown,0,0,0
+sentinella,sentinella_region,region_1,682807.2,713,19.97
+sentinella,sentinella_region,region_2,502081.4,713,14.68
+sentinella,sentinella_region,region_3,483474.1,713,14.14
+sentinella,sentinella_region,region_4,245810.3,713,7.19
+sentinella,sentinella_region,region_5,1099724.9,713,32.16
+sentinella,sentinella_region,region_6,405702.2,713,11.86
+sentinella,sentinella_region,unknown,0,0,0
+sentinella,sex,female,1763039.8,713,51.54
+sentinella,sex,male,1657804,713,48.46
+sentinella,sex,unknown,0,0,0

@@ -19,6 +19,11 @@ sent_C2,sentinella,Info: regional values are extrapolated separately (not additi
 sent_C3,sentinella,"incValue = value / population x 100,000 (plausible population 7.5-9.5 Mio.)",PASS,implied population 8.14 to 9.13 Mio.
 sent_C4,sentinella,No negative ILI values,PASS,
 sent_C5,sentinella,Weighted mean of regions reproduces national ILI rate (validates fallback),PASS,"713 weeks; abs diff per 1,000 consultations: median 0.025, max 0.56; r = 1.0000"
+levels_1,oblig,Share 'unknown' < 1% in every stratification,PASS,"agegroup 0.11%, canton 0.06%, sex 0.39%, type 0.81%"
+levels_2,sentinella,Info: 'unknown' strata contain no values,PASS,"agegroup: 0 weeks with value, sentinella_region: 0 weeks with value, sex: 0 weeks with value"
+levels_3,both,Expected number of levels per stratification,PASS,"oblig/agegroup: 6, oblig/canton: 27, oblig/sex: 3, oblig/type: 3, sentinella/agegroup: 6, sentinella/sentinella_region: 7, sentinella/sex: 3"
+sent_V1,national,Units confirmed against FOPH/BAG first publications (median dev. < 10%; a unit error would be a factor 10/100),PASS,"per 1,000 consultations: 9 weeks, median dev. 2.5%; per 100,000: 11 weeks, median dev. 7.3% (largest in holiday weeks: 2020-W01, 2016-W52)"
+sent_V2,national,Onset rule + published thresholds reproduce FOPH/BAG onset weeks,WARN,"2013/14: reported 2014-W04, ours 2014-W05; 2016/17: reported 2016-W50, ours 2016-W50; 2017/18: reported 2017-W51, ours 2017-W51; 2018/19: reported 2019-W02, ours 2019-W02; 2019/20: reported 2020-W02, ours 2020-W02"
 final_1,national,One row per ISO week in study period,PASS,"715 rows, 715 expected (2013-W01 to 2026-W37)"
 final_2,national,Target (oblig incidence) complete,PASS,0 missing weeks
 final_3,national,Own incidence (cantons summed / BFS) = FOPH/BAG incidence,PASS,max abs diff 0.0050 (FOPH/BAG rounds to 2 decimals)

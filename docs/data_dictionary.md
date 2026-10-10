@@ -46,8 +46,8 @@ Notes: Oblig age, sex and type breakdowns exist only for CH + FL combined. Senti
 
 ## Raw files (`data/raw/`)
 
-Columns as delivered by FOPH/BAG; types are fixed in `R/load_data.R`. Not documented by FOPH/BAG; meanings verified empirically where used:
+Columns as delivered by FOPH/BAG; types are fixed in `R/load_data.R`. The columns are not documented by FOPH/BAG; the meanings of the columns used were validated:
 
-- `incValue` (both): per 100,000 inhabitants (checked against BFS population)
-- `prctConsultations` (Sentinella): ILI share of all consultations in %
+- `incValue` (both): per 100,000 inhabitants (checked against BFS population and against published FOPH/BAG Sentinella values, QC `sent_V1`)
+- `prctConsultations` (Sentinella): ILI share of all consultations in % (× 10 = published "Grippeverdachtsfälle pro 1000 Konsultationen", QC `sent_V1`)
 - `totalConsultationsExtrapolation`, `popExtrapolation` (Sentinella): not documented; used only as weights for the regional fallback (Section 3). With these weights the regional mean reproduces the national `prctConsultations` and `incValue` (QC `sent_C5`)
