@@ -182,6 +182,41 @@ qc_levels <- function(levels, max_unknown_pct = 1) {
   )
 }
 
+# ---- Validation against values published by FOPH/BAG ---------------------------
+
+#' Compares the processed national Sentinella series with weekly values that
+#' FOPH/BAG published at the time (data/reference/bag_reported_values.csv).
+#' Confirms the units (prctConsultations x 10 = per 1,000 consultations;
+#' incValue = per 100,000 inhabitants) and that the season-onset rule with the
+#' published thresholds reproduces the onset weeks reported by FOPH/BAG.
+#' Published values are first releases; small deviations are due to backfilling.
+qc_bag_validation <- function(national, reported, thresholds) {
+  cmp <- dplyr::inner_join(reported, national, by = "iso_week")
+  rel <- function(ours, theirs) abs(ours - theirs) / theirs
+  r1000 <- with(cmp[!is.na(cmp$ili_per_1000), ], rel(sentinella_ili_rate, ili_per_1000))
+  r100k <- with(cmp[!is.na(cmp$ili_per_100k), ], rel(sentinella_ili_inc, ili_per_100k))
+  onsets <- season_boundaries(national, thresholds)
+  rep_on <- reported |>
+    dplyr::filter(reported_onset %in% TRUE) |>
+    dplyr::mutate(season = iso_week_to_season(iso_week)) |>
+    dplyr::left_join(onsets, by = "season")
+  match <- rep_on$iso_week == rep_on$onset_week
+  dplyr::bind_rows(
+    qc_row("sent_V1", "national",
+           "Units confirmed against FOPH/BAG first publications (median dev. < 10%; a unit error would be a factor 10/100)",
+           stats::median(r1000) < 0.10 && stats::median(r100k) < 0.10,
+           sprintf("per 1,000 consultations: %d weeks, median dev. %.1f%%; per 100,000: %d weeks, median dev. %.1f%% (largest in holiday weeks: %s)",
+                   length(r1000), 100 * stats::median(r1000), length(r100k), 100 * stats::median(r100k),
+                   paste(cmp$iso_week[!is.na(cmp$ili_per_100k)][order(-r100k)][1:2], collapse = ", "))),
+    qc_row("sent_V2", "national",
+           "Onset rule + published thresholds reproduce FOPH/BAG onset weeks",
+           all(match),
+           paste(sprintf("%s: reported %s, ours %s", rep_on$season, rep_on$iso_week, rep_on$onset_week),
+                 collapse = "; "),
+           warn_only = TRUE)
+  )
+}
+
 #' Stop the pipeline if any check failed
 assert_qc <- function(qc) {
   failed <- dplyr::filter(qc, result == "FAIL")

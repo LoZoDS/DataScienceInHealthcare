@@ -1,0 +1,21 @@
+# Weekly Sentinella values as originally published by FOPH/BAG (quoted in media / HUG bulletins).
+# Used to validate units and the meaning of the raw columns (QC check sent_V1):
+#   ili_per_1000 <-> prctConsultations x 10,  ili_per_100k <-> incValue.
+# Published values are the first release; the dataset contains later, backfilled values.
+# reported_onset: week in which FOPH/BAG reported the threshold as exceeded (for check sent_V2).
+iso_week,ili_per_1000,ili_per_100k,reported_onset,source,source_url
+2014-W04,,75,TRUE,"TagesWoche 30.01.2014",https://tageswoche.ch/allgemein/epidemie-schwellenwert-bei-grippe-ueberschritten/index.html
+2015-W04,,272,,"SRF 04.02.2015",https://www.srf.ch/news/schweiz/schweiz-der-februar-bringt-ungewoehnlich-viele-grippefaelle
+2015-W05,44.7,358,,"20 Minuten 04.02.2015",https://www.20min.ch/story/die-grippe-hat-die-schweiz-im-griff-912122806477
+2016-W50,,,TRUE,"swissinfo 04.01.2017 (threshold exceeded in week 50)",https://www.swissinfo.ch/ger/die-grippeviren-haben-die-schweiz-im-griff/42810118
+2016-W52,51.7,201,,"swissinfo 04.01.2017",https://www.swissinfo.ch/ger/die-grippeviren-haben-die-schweiz-im-griff/42810118
+2017-W10,5.5,44,,"watson 20.03.2017",https://www.watson.ch/754271919-in-der-schweiz-ist-die-grippewelle-vorueber
+2017-W51,,,TRUE,"swissinfo 14.02.2018 (exceeded in second-last December week)",https://www.swissinfo.ch/ger/die-grippe-hat-die-schweiz-fest-im-griff/43900310
+2018-W02,,361,,"swissinfo 14.02.2018 (peak)",https://www.swissinfo.ch/ger/die-grippe-hat-die-schweiz-fest-im-griff/43900310
+2018-W05,38.7,,,"swissinfo 14.02.2018",https://www.swissinfo.ch/ger/die-grippe-hat-die-schweiz-fest-im-griff/43900310
+2018-W06,36.5,295,,"swissinfo 14.02.2018",https://www.swissinfo.ch/ger/die-grippe-hat-die-schweiz-fest-im-griff/43900310
+2018-W14,6.5,47,,"swissinfo 11.04.2018",https://www.swissinfo.ch/ger/zahl-der-grippe-verdachtsfaelle-unter-epidemischem-schwellenwert/44039562
+2019-W02,,,TRUE,"HUG bulletin (threshold exceeded in week 2/2019)",https://www.hug.ch/en/laboratoire-virologie/influenza-activity-switzerland-actual-situation
+2019-W03,17.3,140,,"HUG bulletin 23.01.2019",https://www.hug.ch/en/laboratoire-virologie/influenza-activity-switzerland-actual-situation
+2020-W01,12.4,59,,"swissinfo 08.01.2020",https://www.swissinfo.ch/ger/grippeerkrankungen-liegen-noch-unter-epidemie-schwellenwert/45479724
+2020-W02,12.1,95,TRUE,"SRF 15.01.2020",https://www.srf.ch/news/schweiz/spaete-ankunft-grippewelle-ist-in-der-schweiz-angekommen

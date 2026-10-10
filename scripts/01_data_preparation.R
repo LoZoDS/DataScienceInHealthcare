@@ -72,9 +72,14 @@ n_fallback <- sum(national$sentinella_source == "regional_weighted_mean", na.rm 
 levels <- levels_overview(strata)
 readr::write_csv(levels, file.path(PATH_QC, "levels_overview.csv"))
 n_expected <- length(iso_week_seq(STUDY_START_ISOWEEK, STUDY_END_ISOWEEK))
+thresholds <- readr::read_csv(file.path(PATH_REFERENCE, "epidemic_thresholds.csv"),
+                              comment = "#", show_col_types = FALSE)
+reported   <- readr::read_csv(file.path(PATH_REFERENCE, "bag_reported_values.csv"),
+                              comment = "#", show_col_types = FALSE)
 qc <- dplyr::bind_rows(
   qc,
   qc_levels(levels),
+  qc_bag_validation(national, reported, thresholds),
   qc_row("final_1", "national", "One row per ISO week in study period",
          nrow(national) == n_expected && !anyDuplicated(national$iso_week),
          sprintf("%d rows, %d expected (%s to %s)", nrow(national), n_expected,
@@ -97,8 +102,6 @@ print(qc, n = Inf)
 assert_qc(qc)
 
 # season summary (descriptive input for 4.2; onset/end needs thresholds)
-thresholds <- readr::read_csv(file.path(PATH_REFERENCE, "epidemic_thresholds.csv"),
-                              comment = "#", show_col_types = FALSE)
 season_summary <- national |>
   dplyr::group_by(season, period, complete_season, test_season) |>
   dplyr::summarise(

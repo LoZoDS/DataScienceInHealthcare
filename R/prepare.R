@@ -180,7 +180,7 @@ build_strata_long <- function(oblig, sent) {
 #' Seasons without a threshold get NA (see docs/open_issues.md).
 season_boundaries <- function(national, thresholds) {
   national |>
-    dplyr::left_join(thresholds, by = "season") |>
+    dplyr::left_join(dplyr::select(thresholds, season, threshold_ili_per_100k), by = "season") |>
     dplyr::group_by(season) |>
     dplyr::arrange(iso_week, .by_group = TRUE) |>
     dplyr::summarise(

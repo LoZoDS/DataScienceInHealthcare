@@ -1,20 +1,24 @@
-# FOPH/BAG seasonal epidemic threshold for Sentinella ILI consultations per 100,000 inhabitants.
+# FOPH/BAG seasonal epidemic threshold for Sentinella ILI consultations per 100,000 inhabitants
+# ("Epid. Schwellenwert: Das Niveau der Inzidenz, ab welcher man von einer Epidemie spricht;
+#  basiert auf einem Durchschnitt der letzten zehn Saisons" - FOPH/BAG glossary, quoted by HUG).
 # Used for season onset/end in Section 4.2 (first of two consecutive weeks above threshold).
-# IMPORTANT: FOPH/BAG stopped publishing an ILI threshold from season 2020/21 onwards
-# ("Auf die Angabe eines epidemischen Schwellenwerts wird seit Saison 2020/21 verzichtet",
-# Sentinella weekly report 47/2021); since 2023/24 the epidemic period is defined by 10% test positivity.
-# Empty = not yet verified / not published. To be completed or replaced by WP 4.2 (see docs/open_issues.md).
-season,threshold_ili_per_100k,source
-2013/14,,
-2014/15,,
-2015/16,,
-2016/17,64,HUG virology lab glossary citing FOPH/BAG
-2017/18,,
-2018/19,68,HUG influenza bulletin (Jan 2019) citing FOPH/BAG
-2019/20,,
-2020/21,,not published by FOPH/BAG
-2021/22,,not published by FOPH/BAG
-2022/23,,not published by FOPH/BAG
-2023/24,,not published (FOPH/BAG uses 10% positivity)
-2024/25,,not published (FOPH/BAG uses 10% positivity)
-2025/26,,not published (FOPH/BAG uses 10% positivity)
+# Values are FOPH/BAG figures as quoted in media reports / HUG bulletins (FOPH/BAG originals not
+# reachable from the analysis environment). The scale (per 100,000) is stated in the sources.
+# FOPH/BAG stopped publishing an ILI threshold from 2020/21 onwards ("Auf die Angabe eines
+# epidemischen Schwellenwerts wird seit Saison 2020/21 verzichtet", Sentinella weekly report 47/2021,
+# read from a copy on readkong.com). Since 2023/24 the epidemic period is defined by 10% test positivity.
+# Empty = no value found / not published. See docs/open_issues.md, issue 1.
+season,threshold_ili_per_100k,source,source_url
+2013/14,74,"TagesWoche 30.01.2014 (BAG weekly figures, week 4/2014)",https://tageswoche.ch/allgemein/epidemie-schwellenwert-bei-grippe-ueberschritten/index.html
+2014/15,70,"20 Minuten 04.02.2015 ('für die Saison 2014/2015'); SRF 04.02.2015",https://www.20min.ch/story/die-grippe-hat-die-schweiz-im-griff-912122806477
+2015/16,,"not found",
+2016/17,64,"HUG glossary ('für die Saison 2016/17'); swissinfo 04.01.2017; watson 20.03.2017",https://www.hug.ch/en/laboratoire-virologie/influenza-activity-switzerland-actual-situation
+2017/18,68,"swissinfo 14.02.2018 and 11.04.2018",https://www.swissinfo.ch/ger/zahl-der-grippe-verdachtsfaelle-unter-epidemischem-schwellenwert/44039562
+2018/19,68,"HUG bulletin quoting FOPH/BAG, exceeded in week 2/2019",https://www.hug.ch/en/laboratoire-virologie/influenza-activity-switzerland-actual-situation
+2019/20,69,"SRF 15.01.2020; swissinfo 08.01.2020",https://www.srf.ch/news/schweiz/spaete-ankunft-grippewelle-ist-in-der-schweiz-angekommen
+2020/21,,"not published by FOPH/BAG",
+2021/22,,"not published by FOPH/BAG",
+2022/23,,"not published by FOPH/BAG",
+2023/24,,"not published (FOPH/BAG uses 10% positivity)",
+2024/25,,"not published (FOPH/BAG uses 10% positivity)",
+2025/26,,"not published (FOPH/BAG uses 10% positivity)",
