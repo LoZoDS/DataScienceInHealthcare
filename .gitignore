@@ -1,0 +1,13 @@
+# R
+.Rhistory
+.RData
+.Rproj.user/
+.Rapp.history
+*.Rcheck/
+# rendered HTML (the .md version is committed for GitHub)
+reports/*.html
+reports/*_cache/
+# OS / editors
+.DS_Store
+Thumbs.db
+~$*
