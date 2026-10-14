@@ -74,3 +74,12 @@ SYSTEM_LABELS <- c("Mandatory reporting (cases per 100,000)",
 # threshold for each season estimated only from earlier complete, non-COVID seasons
 MEM_MIN_SEASONS <- 5L    # fewer earlier seasons -> no MEM threshold (estimate unstable)
 MEM_MAX_SEASONS <- 10L   # mem default: the 10 most recent seasons
+# Sentinella regions (FOPH/BAG); labels for tables and figures.
+# TODO: confirm the canton assignment against the FOPH/BAG Sentinella documentation.
+SENTINELLA_REGIONS <- c(
+  region_1 = "Region 1 (GE, NE, VD, VS)",
+  region_2 = "Region 2 (BE, FR, JU)",
+  region_3 = "Region 3 (AG, BL, BS, SO)",
+  region_4 = "Region 4 (LU, NW, OW, SZ, UR, ZG)",
+  region_5 = "Region 5 (AI, AR, GL, SG, SH, TG, ZH)",
+  region_6 = "Region 6 (GR, TI)")

@@ -263,3 +263,85 @@ mem_validation <- function(national, mem_th, bag_th, reported) {
     dplyr::left_join(onset(mem_th, "onset_mem"), by = "season") |>
     dplyr::left_join(onset(retro_th, "onset_mem_retro"), by = "season")
 }
+
+# Unusual observations
+# Influenza type per season (mandatory reporting, CH + FL): cases of type A, B and unknown, share of B, and the peak week of A and B separately
+type_by_season <- function(strata) {
+  ty <- strata |>
+    dplyr::filter(system == "oblig", dimension == "type")
+  totals <- ty |>
+    dplyr::group_by(season, level) |>
+    dplyr::summarise(cases = sum(count, na.rm = TRUE), .groups = "drop") |>
+    tidyr::pivot_wider(names_from = level, values_from = cases, values_fill = 0) |>
+    dplyr::mutate(share_B = B / (A + B + unknown))
+  peaks <- ty |>
+    dplyr::filter(level %in% c("A", "B")) |>
+    dplyr::group_by(season, level) |>
+    dplyr::slice_max(count, n = 1, with_ties = FALSE) |>
+    dplyr::ungroup() |>
+    dplyr::select(season, level, iso_week) |>
+    tidyr::pivot_wider(names_from = level, values_from = iso_week, names_prefix = "peak_week_")
+  dplyr::left_join(totals, peaks, by = "season")
+}
+
+# Off-season baseline per season: median weekly value in ISO weeks W23-W36 (season weeks 36-49), when almost no influenza circulates
+offseason_baseline <- function(national) {
+  national |>
+    dplyr::filter(season_week >= 36, season_week <= 49) |>
+    dplyr::group_by(season, period) |>
+    dplyr::summarise(sent_ili_rate_median = stats::median(sentinella_ili_rate, na.rm = TRUE),
+                     oblig_inc_median     = stats::median(oblig_inc_100k),
+                     weeks = dplyr::n(), .groups = "drop")
+}
+
+# Consultation volume per ISO week relative to the typical week.
+# Total Sentinella consultations per 100,000 inhabitants are derived from the two published rates:
+# (ILI per 100,000) / (ILI per 1,000 consultations) x 1,000.
+# A low value means fewer consultations in total (holidays), which inflates the ILI rate per 1,000 consultations even if ILI cases do not change.
+consultation_volume <- function(national) {
+  national |>
+    dplyr::mutate(consultations_100k = sentinella_ili_inc / sentinella_ili_rate * 1000) |>
+    dplyr::filter(is.finite(consultations_100k)) |>
+    dplyr::group_by(iso_wk) |>
+    dplyr::summarise(consultations_median = stats::median(consultations_100k),
+                     n_years = dplyr::n(), .groups = "drop") |>
+    dplyr::mutate(relative = consultations_median / stats::median(consultations_median))
+}
+
+# Regional variation (descriptive only)
+# Peak week and peak intensity per Sentinella region and season (ILI consultations per 100'000 inhabitants of the region)
+# and the difference to the national Sentinella peak week (> 0: region peaks later than Switzerland)
+region_peaks <- function(strata, national) {
+  nat <- national |>
+    dplyr::filter(!is.na(sentinella_ili_inc)) |>
+    dplyr::group_by(season) |>
+    dplyr::slice_max(sentinella_ili_inc, n = 1, with_ties = FALSE) |>
+    dplyr::ungroup() |>
+    dplyr::select(season, national_peak_week = iso_week, national_peak_sw = season_week)
+  sw <- dplyr::distinct(national, iso_week, season_week, in_summary)
+  strata |>
+    dplyr::filter(system == "sentinella", dimension == "sentinella_region",
+                  level != "unknown", !is.na(incidence_100k)) |>
+    dplyr::left_join(sw, by = "iso_week") |>
+    dplyr::group_by(season, region = level) |>
+    dplyr::slice_max(incidence_100k, n = 1, with_ties = FALSE) |>
+    dplyr::ungroup() |>
+    dplyr::select(season, region, in_summary, peak_week = iso_week, peak_sw = season_week,
+                  peak_ili_100k = incidence_100k) |>
+    dplyr::left_join(nat, by = "season") |>
+    dplyr::mutate(diff_weeks = peak_sw - national_peak_sw,
+                  region_label = SENTINELLA_REGIONS[region])
+}
+
+# Summary per region over the seasons in summary statistics
+region_summary <- function(rp) {
+  rp |>
+    dplyr::filter(in_summary) |>
+    dplyr::group_by(region, region_label) |>
+    dplyr::summarise(seasons = dplyr::n(),
+                     median_diff_weeks = stats::median(diff_weeks),
+                     earlier = sum(diff_weeks < 0), same = sum(diff_weeks == 0),
+                     later = sum(diff_weeks > 0),
+                     median_peak_ili_100k = stats::median(peak_ili_100k),
+                     .groups = "drop")
+}

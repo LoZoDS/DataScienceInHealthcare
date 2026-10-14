@@ -35,6 +35,11 @@ reported <- readr::read_csv(file.path(PATH_REFERENCE, "bag_reported_values.csv")
 mem_th     <- mem_thresholds(national)
 validation <- mem_validation(national, mem_th, bag_th, reported)
 boundaries <- boundaries_both_systems(national, mem_th, peaks)
+types         <- type_by_season(strata)
+baseline      <- offseason_baseline(national)
+consultations <- consultation_volume(national)
+reg_peaks     <- region_peaks(strata, national)
+reg_sum       <- region_summary(reg_peaks)
 
 # Colours: systems as in CONTRIBUTING.md; periods in neutral greys (+ line type)
 COL_SYSTEM <- setNames(c(COL_OBLIG, COL_SENT), SYSTEM_LABELS)
@@ -294,11 +299,110 @@ weeks for WP 4.5 in `output/eda/in_season_weeks.csv`.*
 
 # 5 Unusual observations
 
-*(next step)*
+```{r unusual-numbers}
+w <- function(week, col) national[[col]][national$iso_week == week]
+b20 <- dplyr::filter(boundaries, season == "2020/21")
+ty  <- function(s, col) types[[col]][types$season == s]
+base_pre  <- stats::median(baseline$sent_ili_rate_median[baseline$period == "pre2020"])
+base_post <- stats::median(baseline$sent_ili_rate_median[baseline$period == "post2020"])
+hol <- consultations |> dplyr::filter(iso_wk %in% c(52, 53, 1))
+```
+
+1. **Lockdown in spring 2020.** From 2020-W11 lab-confirmed cases fell from
+   `r w("2020-W10", "oblig_cases")` (W10) to `r w("2020-W15", "oblig_cases")`
+   (W15), and Sentinella has no values in 2020-W11 and W12. The weeks from
+   2020-W11 to the end of season 2019/20 are flagged (`lockdown_2020`) and left
+   out of the typical-season curves and the MEM training data.
+2. **ILI without influenza in autumn 2020.** In 2020/21 the Sentinella ILI rate
+   exceeded the MEM threshold from `r b20$onset_week` to `r b20$end_week`,
+   while the whole season had only `r peaks$oblig_cases[peaks$season == "2020/21"]`
+   lab-confirmed influenza cases. Since 2020, ILI also captures SARS-CoV-2 and
+   other respiratory viruses; the "season" defined by Sentinella alone is not an
+   influenza season here.
+3. **Higher Sentinella baseline after 2020.** Outside the season (W23–W36), the
+   median ILI rate was `r round(base_pre, 1)` per 1,000 consultations before
+   2020 and `r round(base_post, 1)` from 2022/23 – about
+   `r round(base_post / base_pre)` times higher. This raises the MEM
+   threshold for later seasons (section 4) and weakens the link between ILI and
+   influenza (relevant for WP 4.3).
+4. **Late spring wave 2021/22.** After two seasons with almost no influenza,
+   the oblig peak came only in `r peaks$oblig_peak_week[peaks$season == "2021/22"]`
+   (week `r peaks$oblig_peak_sw[peaks$season == "2021/22"]` of the season; only
+   2015/16 peaked as late).
+5. **Large peak gaps between the systems.** In 2015/16 the oblig peak
+   (`r peaks$oblig_peak_week[peaks$season == "2015/16"]`) came
+   `r peaks$peak_lag_weeks[peaks$season == "2015/16"]` weeks after the Sentinella
+   peak. That season was dominated by influenza B
+   (`r round(100 * ty("2015/16", "share_B"))`% of cases), and both types peaked
+   late (A: `r ty("2015/16", "peak_week_A")`, B: `r ty("2015/16", "peak_week_B")`)
+   although ILI consultations had already peaked. In 2023/24 Sentinella peaked
+   in `r peaks$sent_peak_week[peaks$season == "2023/24"]` while the influenza
+   peak followed in `r peaks$oblig_peak_week[peaks$season == "2023/24"]`; with
+   only `r round(100 * ty("2023/24", "share_B"))`% type B, the early ILI peak was
+   probably driven by other respiratory viruses.
+6. **Holiday weeks.** Around Christmas and New Year the total number of
+   Sentinella consultations drops to about
+   `r round(100 * min(hol$relative))`–`r round(100 * max(hol$relative))`% of a
+   typical week. Because the predictor is a *share* of consultations (ILI per
+   1,000 consultations), it can rise in these weeks even if ILI cases do not
+   (relevant for WP 4.4).
+
+```{r tab-types}
+types |>
+  dplyr::transmute(season, A, B, share_B = sprintf("%.0f%%", 100 * share_B),
+                   peak_week_A, peak_week_B) |>
+  knitr::kable(col.names = c("Season", "Type A", "Type B", "Share B",
+                             "Peak week A", "Peak week B"),
+               caption = "Lab-confirmed cases by influenza type (CH + FL)")
+```
+
+```{r fig-consultations, fig.height = 3.5}
+ggplot(consultations, aes(iso_wk, relative)) +
+  geom_hline(yintercept = 1, colour = "grey70") +
+  geom_col(fill = COL_SENT, width = 0.7) +
+  scale_x_continuous(breaks = c(1, 10, 20, 30, 40, 52)) +
+  scale_y_continuous(labels = scales::percent) +
+  labs(x = "ISO week", y = NULL,
+       title = "Total Sentinella consultations per ISO week, relative to a typical week",
+       subtitle = "Median over 2013 to 2026. Low values: holidays (Christmas/New Year, summer)")
+```
 
 # 6 Regional variation
 
-*(next step)*
+Regional variation is described only: the forecasting target is
+national and regional series rest on fewer practices and are noisier.
+The figure shows, per Sentinella region and season, how many weeks the
+regional ILI peak (per 100'000 inhabitants) came before (negative) or after
+(positive) the national peak.
+
+```{r fig-regions, fig.height = 4.5}
+reg_peaks |>
+  dplyr::mutate(season = factor(season, levels = sort(unique(season))),
+                region_label = factor(region_label, levels = rev(SENTINELLA_REGIONS))) |>
+  ggplot(aes(season, region_label, fill = diff_weeks)) +
+  geom_tile(colour = "white", linewidth = 1) +
+  geom_text(aes(label = sprintf("%+d", diff_weeks)), size = 3, colour = "grey15") +
+  scale_fill_gradient2(low = COL_OBLIG, mid = "#f0efec", high = "#e34948", midpoint = 0,
+                       limits = c(-6, 6), oob = scales::squish, guide = "none") +
+  labs(x = NULL, y = NULL,
+       title = "Regional peak week minus national peak week (Sentinella)",
+       subtitle = "Negative (blue): region peaks earlier; positive (red): later") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), panel.grid = element_blank())
+```
+
+```{r tab-regions}
+reg_sum |>
+  dplyr::transmute(region_label, seasons, median_diff = median_diff_weeks,
+                   earlier, same, later, median_peak = round(median_peak_ili_100k)) |>
+  knitr::kable(col.names = c("Region", "Seasons", "Median difference (weeks)", "Earlier",
+                             "Same week", "Later", "Median peak (ILI per 100,000)"),
+               caption = "Regional peaks relative to the national peak (seasons in summary statistics)")
+```
+
+*Interpretation (tbd): regional peaks mostly within ±1–2 weeks of the
+national peak; no region leads consistently enough to justify regional
+predictors; region 6 shows the highest and noisiest values (fewest practices).
+Canton assignment of the Sentinella regions to be confirmed (config.R).*
 
 # 7 Key findings for WP 4.3–4.5
 

@@ -175,11 +175,86 @@ window; in-season weeks for WP 4.5 in `output/eda/in_season_weeks.csv`.*
 
 # 5 Unusual observations
 
-*(next step)*
+1.  **Lockdown in spring 2020.** From 2020-W11 lab-confirmed cases fell
+    from 890 (W10) to 3 (W15), and Sentinella has no values in 2020-W11
+    and W12. The weeks from 2020-W11 to the end of season 2019/20 are
+    flagged (`lockdown_2020`) and left out of the typical-season curves
+    and the MEM training data.
+2.  **ILI without influenza in autumn 2020.** In 2020/21 the Sentinella
+    ILI rate exceeded the MEM threshold from 2020-W43 to 2020-W51, while
+    the whole season had only 104 lab-confirmed influenza cases. Since
+    2020, ILI also captures SARS-CoV-2 and other respiratory viruses;
+    the “season” defined by Sentinella alone is not an influenza season
+    here.
+3.  **Higher Sentinella baseline after 2020.** Outside the season
+    (W23–W36), the median ILI rate was 0.2 per 1,000 consultations
+    before 2020 and 2.6 from 2022/23 – about 10 times higher. This
+    raises the MEM threshold for later seasons (section 4) and weakens
+    the link between ILI and influenza (relevant for WP 4.3).
+4.  **Late spring wave 2021/22.** After two seasons with almost no
+    influenza, the oblig peak came only in 2022-W12 (week 25 of the
+    season; only 2015/16 peaked as late).
+5.  **Large peak gaps between the systems.** In 2015/16 the oblig peak
+    (2016-W11) came 5 weeks after the Sentinella peak. That season was
+    dominated by influenza B (53% of cases), and both types peaked late
+    (A: 2016-W11, B: 2016-W12) although ILI consultations had already
+    peaked. In 2023/24 Sentinella peaked in 2023-W52 while the influenza
+    peak followed in 2024-W04; with only 4% type B, the early ILI peak
+    was probably driven by other respiratory viruses.
+6.  **Holiday weeks.** Around Christmas and New Year the total number of
+    Sentinella consultations drops to about 56–65% of a typical week.
+    Because the predictor is a *share* of consultations (ILI per 1,000
+    consultations), it can rise in these weeks even if ILI cases do not
+    (relevant for WP 4.4).
+
+| Season  | Type A | Type B | Share B | Peak week A | Peak week B |
+|:--------|-------:|-------:|:--------|:------------|:------------|
+| 2012/13 |   1543 |   1290 | 45%     | 2013-W06    | 2013-W07    |
+| 2013/14 |   1507 |     36 | 2%      | 2014-W08    | 2014-W08    |
+| 2014/15 |   4488 |   1403 | 24%     | 2015-W07    | 2015-W11    |
+| 2015/16 |   1735 |   2034 | 53%     | 2016-W11    | 2016-W12    |
+| 2016/17 |   9267 |    314 | 3%      | 2017-W01    | 2017-W10    |
+| 2017/18 |   5317 |   9871 | 65%     | 2018-W10    | 2018-W01    |
+| 2018/19 |  13530 |    101 | 1%      | 2019-W07    | 2019-W05    |
+| 2019/20 |   8592 |   3083 | 26%     | 2020-W05    | 2020-W09    |
+| 2020/21 |     75 |     27 | 26%     | 2020-W51    | 2020-W51    |
+| 2021/22 |  12275 |     80 | 1%      | 2022-W12    | 2022-W18    |
+| 2022/23 |  19611 |   5431 | 22%     | 2022-W51    | 2023-W08    |
+| 2023/24 |  18911 |    798 | 4%      | 2024-W04    | 2024-W09    |
+| 2024/25 |  21494 |   6601 | 23%     | 2025-W05    | 2025-W06    |
+| 2025/26 |  24337 |    314 | 1%      | 2026-W01    | 2026-W01    |
+
+Lab-confirmed cases by influenza type (CH + FL)
+
+![](figures/02_fig-consultations-1.png)<!-- -->
 
 # 6 Regional variation
 
-*(next step)*
+Regional variation is described only: the forecasting target is national
+and regional series rest on fewer practices and are noisier. The figure
+shows, per Sentinella region and season, how many weeks the regional ILI
+peak (per 100’000 inhabitants) came before (negative) or after
+(positive) the national peak.
+
+![](figures/02_fig-regions-1.png)<!-- -->
+
+| Region | Seasons | Median difference (weeks) | Earlier | Same week | Later | Median peak (ILI per 100,000) |
+|:---|---:|---:|---:|---:|---:|---:|
+| Region 1 (GE, NE, VD, VS) | 12 | 0 | 2 | 5 | 5 | 290 |
+| Region 2 (BE, FR, JU) | 12 | 0 | 3 | 6 | 3 | 259 |
+| Region 3 (AG, BL, BS, SO) | 12 | 1 | 0 | 5 | 7 | 314 |
+| Region 4 (LU, NW, OW, SZ, UR, ZG) | 12 | 0 | 4 | 3 | 5 | 202 |
+| Region 5 (AI, AR, GL, SG, SH, TG, ZH) | 12 | 0 | 2 | 6 | 4 | 281 |
+| Region 6 (GR, TI) | 12 | 0 | 5 | 6 | 1 | 664 |
+
+Regional peaks relative to the national peak (seasons in summary
+statistics)
+
+*Interpretation (tbd): regional peaks mostly within ±1–2 weeks of the
+national peak; no region leads consistently enough to justify regional
+predictors; region 6 shows the highest and noisiest values (fewest
+practices). Canton assignment of the Sentinella regions to be confirmed
+(config.R).*
 
 # 7 Key findings for WP 4.3–4.5
 

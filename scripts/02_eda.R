@@ -71,9 +71,21 @@ message(sprintf("MEM: thresholds for %d seasons; retrospective pre-2020 threshol
                 sum(!is.na(mem_th$threshold_ili_per_100k)), validation$mem_retro_threshold[1]))
 
 # 5. Unusual observations
-# (next step)
+# Evidence for the unusual observations described in the report:
+# influenza type per season, off-season baseline, consultation volume around holidays
+types         <- type_by_season(strata)
+baseline      <- offseason_baseline(national)
+consultations <- consultation_volume(national)
+readr::write_csv(types,         file.path(PATH_EDA, "type_by_season.csv"))
+readr::write_csv(baseline,      file.path(PATH_EDA, "offseason_baseline.csv"))
+readr::write_csv(consultations, file.path(PATH_EDA, "consultation_volume.csv"))
 
 # 6. Regional variation (descriptive only)
-# (next step)
+# Peak week and intensity per Sentinella region; regions are only described
+# (Section 4.2: smaller numbers, noisier series, national forecasting target)
+reg_peaks <- region_peaks(strata, national)
+reg_sum   <- region_summary(reg_peaks)
+readr::write_csv(reg_peaks, file.path(PATH_EDA, "region_peaks.csv"))
+readr::write_csv(reg_sum,   file.path(PATH_EDA, "region_summary.csv"))
 
 message("Done. Tables in ", PATH_EDA)
