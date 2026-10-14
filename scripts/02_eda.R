@@ -38,10 +38,21 @@ message(sprintf("Sentinella missing: %s",
                 paste(national$iso_week[national$sentinella_missing], collapse = ", ")))
 
 # 2. Seasonal patterns
-# (next step)
+# Descriptive statistics per period and the typical season (median per season week)
+periods <- period_summary(national)
+typical <- typical_season(national)
+readr::write_csv(periods, file.path(PATH_EDA, "period_summary.csv"))
+readr::write_csv(typical, file.path(PATH_EDA, "typical_season.csv"))
 
 # 3. Peak timing and intensity
-# (next step)
+# Peak week and peak intensity per season and system, plus summary by period
+peaks    <- peaks_per_season(national)
+peak_sum <- peak_summary(peaks)
+readr::write_csv(peaks,    file.path(PATH_EDA, "peaks_per_season.csv"))
+readr::write_csv(peak_sum, file.path(PATH_EDA, "peak_summary.csv"))
+message(sprintf("Peaks: %d seasons; Sentinella peak earlier than oblig in %d, same week in %d, later in %d",
+                nrow(peaks), sum(peaks$peak_lag_weeks > 0), sum(peaks$peak_lag_weeks == 0),
+                sum(peaks$peak_lag_weeks < 0)))
 
 # 4. Season onset and end (MEM)
 # (next step)

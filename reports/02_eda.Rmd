@@ -23,6 +23,22 @@ source("R/setup.R")
 national <- load_national()
 strata   <- load_strata()
 check_eda_inputs(national, strata)
+periods  <- period_summary(national)
+typical  <- typical_season(national)
+peaks    <- peaks_per_season(national)
+peak_sum <- peak_summary(peaks)
+long     <- national_long(national)
+
+# Colours: systems as in CONTRIBUTING.md; periods in neutral greys (+ line type)
+COL_SYSTEM <- setNames(c(COL_OBLIG, COL_SENT), SYSTEM_LABELS)
+COL_PERIOD <- c(pre2020_partial = "#b8bec6", pre2020 = "#9aa3ad",
+                covid = "#c9ced4", post2020 = "#2d3540")
+LTY_PERIOD <- c(pre2020_partial = "solid", pre2020 = "solid",
+                covid = "22", post2020 = "solid")
+covid_rect <- national |>
+  dplyr::filter(covid_season) |>
+  dplyr::summarise(xmin = min(week_start), xmax = max(week_start) + 7)
+sw_breaks <- c(1, 9, 14, 18, 23, 27, 36, 49)
 
 theme_set(theme_minimal(base_size = 11) +
   theme(panel.grid.minor = element_blank(),
@@ -60,11 +76,139 @@ national |>
 
 # 2 Seasonal patterns
 
-*(next step)*
+```{r fig-series, fig.height = 6}
+ggplot(long, aes(week_start, value)) +
+  geom_rect(data = covid_rect, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf),
+            inherit.aes = FALSE, fill = "grey92") +
+  geom_line(aes(colour = system), linewidth = 0.5) +
+  facet_wrap(~ system, ncol = 1, scales = "free_y") +
+  scale_colour_manual(values = COL_SYSTEM, guide = "none") +
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y") +
+  labs(x = NULL, y = NULL,
+       title = "Weekly influenza activity in Switzerland, 2013-W01 to 2026-W37",
+       subtitle = "Grey band: COVID-19 seasons 2020/21 and 2021/22")
+```
+
+**Overall pattern.** Both systems show one clear winter wave per season, with
+low activity between seasons. The COVID-19 seasons interrupt the pattern
+(2020/21 almost without influenza, 2021/22 with a late spring wave). From
+2022/23 the mandatory reporting system runs at a clearly higher level,
+while the Sentinella ILI rate does not rise to the same extent.
+
+```{r fig-overlay, fig.height = 6}
+ggplot(long, aes(season_week, value, group = season)) +
+  geom_line(aes(colour = period, linetype = period), linewidth = 0.5) +
+  facet_wrap(~ system, ncol = 1, scales = "free_y") +
+  scale_colour_manual(values = COL_PERIOD, name = "Period") +
+  scale_linetype_manual(values = LTY_PERIOD, name = "Period") +
+  scale_x_continuous(breaks = sw_breaks, labels = season_week_label(sw_breaks)) +
+  labs(x = "Calendar week (season runs W40 to W39)", y = NULL,
+       title = "All seasons overlaid on the season calendar")
+```
+
+```{r fig-typical, fig.height = 6}
+ggplot(typical, aes(season_week, median, colour = period, fill = period)) +
+  geom_ribbon(aes(ymin = q25, ymax = q75), colour = NA, alpha = 0.18) +
+  geom_line(linewidth = 0.7) +
+  facet_wrap(~ system, ncol = 1, scales = "free_y") +
+  scale_colour_manual(values = COL_PERIOD, name = "Period") +
+  scale_fill_manual(values = COL_PERIOD, name = "Period") +
+  scale_x_continuous(breaks = sw_breaks, labels = season_week_label(sw_breaks)) +
+  labs(x = "Calendar week (season runs W40 to W39)", y = NULL,
+       title = "Typical season: median per week, pre-2020 vs post-2020",
+       subtitle = "Band: interquartile range across seasons. COVID seasons, 2012/13 and lockdown weeks excluded")
+```
+
+```{r tab-periods}
+periods |>
+  dplyr::mutate(dplyr::across(c(mean, median, p90, max), ~ round(.x, 2)),
+                pct_zero = round(pct_zero, 1)) |>
+  knitr::kable(col.names = c("System", "Period", "Seasons", "Weeks", "Mean", "Median",
+                             "90th pct.", "Max", "% weeks = 0"),
+               caption = "Weekly values per period")
+```
+
+*Interpretation (tbd): typical start, peak and end of the season;
+level shift after 2020; how much seasons differ from each other.*
 
 # 3 Peak timing and intensity
 
-*(next step)*
+Peak week = week of maximum weekly value, peak intensity = that maximum
+(Section 4.2), determined separately for both systems. If two weeks share the
+maximum, the first is used. The peak lag is the oblig peak week minus the
+Sentinella peak week (positive: Sentinella peaks earlier).
+
+```{r tab-peaks}
+peaks |>
+  dplyr::transmute(season, period,
+                   oblig_peak_week, oblig_peak = round(oblig_peak_value, 1),
+                   sent_peak_week, sent_peak = round(sent_peak_value, 1),
+                   peak_lag_weeks,
+                   note = dplyr::case_when(!complete_season ~ "incomplete season",
+                                           !in_summary ~ "no influenza season",
+                                           test_season ~ "test season",
+                                           TRUE ~ "")) |>
+  knitr::kable(col.names = c("Season", "Period", "Peak week (oblig)", "Peak (cases/100k)",
+                             "Peak week (Sentinella)", "Peak (ILI/1,000)", "Lag (weeks)", "Note"))
+```
+
+```{r fig-peak-week, fig.height = 5}
+peaks |>
+  dplyr::select(season, in_summary, oblig = oblig_peak_sw, sentinella = sent_peak_sw) |>
+  tidyr::pivot_longer(c(oblig, sentinella), names_to = "system", values_to = "peak_sw") |>
+  dplyr::mutate(system = factor(system, levels = c("oblig", "sentinella"), labels = SYSTEM_LABELS),
+                season = factor(season, levels = rev(sort(unique(season))))) |>
+  ggplot(aes(peak_sw, season, colour = system, shape = system)) +
+  geom_line(aes(group = season), colour = "grey80", linewidth = 0.6) +
+  geom_point(size = 2.8) +
+  scale_colour_manual(values = COL_SYSTEM, name = NULL) +
+  scale_shape_manual(values = c(16, 17), name = NULL) +
+  scale_x_continuous(breaks = sw_breaks, labels = season_week_label(sw_breaks)) +
+  labs(x = "Peak week", y = NULL, title = "Peak week per season") +
+  theme(legend.position = "top", panel.grid.major.y = element_line(colour = "grey95"))
+```
+
+```{r fig-peak-intensity, fig.height = 5}
+peaks |>
+  dplyr::select(season, in_summary, oblig = oblig_peak_value, sentinella = sent_peak_value) |>
+  tidyr::pivot_longer(c(oblig, sentinella), names_to = "system", values_to = "peak") |>
+  dplyr::mutate(system = factor(system, levels = c("oblig", "sentinella"), labels = SYSTEM_LABELS),
+                season = factor(season, levels = rev(sort(unique(season))))) |>
+  ggplot(aes(peak, season, fill = system, alpha = in_summary)) +
+  geom_col(width = 0.7) +
+  facet_wrap(~ system, scales = "free_x") +
+  scale_fill_manual(values = COL_SYSTEM, guide = "none") +
+  scale_alpha_manual(values = c(`TRUE` = 1, `FALSE` = 0.35), guide = "none") +
+  labs(x = NULL, y = NULL, title = "Peak intensity per season",
+       subtitle = "Pale bars: 2012/13 (incomplete) and 2020/21 (no influenza season)")
+```
+
+```{r tab-peak-summary}
+peak_sum |>
+  dplyr::transmute(period, seasons,
+                   oblig_week = sprintf("%s (SD %.1f, %s to %s)",
+                                        season_week_label(round(oblig_peak_sw_mean)), oblig_peak_sw_sd,
+                                        season_week_label(oblig_peak_sw_min), season_week_label(oblig_peak_sw_max)),
+                   sent_week  = sprintf("%s (SD %.1f)", season_week_label(round(sent_peak_sw_mean)), sent_peak_sw_sd),
+                   oblig_peak = round(oblig_peak_median, 1),
+                   sent_peak  = round(sent_peak_median, 1),
+                   lag = sprintf("%.1f (%d to %d)", lag_mean, lag_min, lag_max)) |>
+  knitr::kable(col.names = c("Period", "Seasons", "Mean peak week oblig (SD in weeks, range)",
+                             "Mean peak week Sentinella (SD)", "Median peak oblig", "Median peak Sentinella",
+                             "Mean lag in weeks (range)"),
+               caption = "Peak timing and intensity by period (seasons in summary statistics only)")
+```
+
+In `r sum(peaks$peak_lag_weeks > 0)` of `r nrow(peaks)` seasons the Sentinella
+peak comes before the oblig peak, in `r sum(peaks$peak_lag_weeks == 0)` both
+peak in the same week and in `r sum(peaks$peak_lag_weeks < 0)` the oblig peak
+comes first. The largest gaps are in
+`r paste(peaks$season[abs(peaks$peak_lag_weeks) >= 4], collapse = ", ")` (see
+section 5).
+
+*Interpretation (tbd): peak timing pre vs post 2020; higher oblig peaks
+after 2020 partly reflect more testing (compare with Sentinella); relevance of
+the peak lag for WP 4.3.*
 
 # 4 Season onset and end
 

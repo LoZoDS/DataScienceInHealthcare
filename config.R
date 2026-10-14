@@ -67,3 +67,6 @@ EDA_LOCKDOWN_WEEKS_2020 <- sprintf("2020-W%02d", 11:39)   # until end of season 
 # Colours used throughout the project (CONTRIBUTING.md)
 COL_OBLIG <- "#2a78d6"   # mandatory reporting
 COL_SENT  <- "#eb6834"   # Sentinella
+# Display names of the two systems in tables and figures
+SYSTEM_LABELS <- c("Mandatory reporting (cases per 100,000)",
+                   "Sentinella (ILI per 1,000 consultations)")
