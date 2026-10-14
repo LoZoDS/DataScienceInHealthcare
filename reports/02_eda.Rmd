@@ -1,0 +1,83 @@
+---
+title: "WP 4.2 – Exploratory Analysis"
+subtitle: "From Surveillance to Prediction: Forecasting Weekly Influenza Activity in Switzerland"
+author: "S. Ryf (responsible), L. Zovkic (feedback)"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  github_document:
+    toc: true
+    fig_width: 9
+    fig_height: 5
+    dev: png
+    df_print: kable
+---
+
+```{r setup, include = FALSE}
+knitr::opts_knit$set(root.dir = normalizePath(".."))
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, dpi = 150,
+                      fig.path = "figures/02_")
+```
+
+```{r load}
+source("R/setup.R")
+national <- load_national()
+strata   <- load_strata()
+check_eda_inputs(national, strata)
+
+theme_set(theme_minimal(base_size = 11) +
+  theme(panel.grid.minor = element_blank(),
+        panel.grid.major.x = element_blank(),
+        plot.title.position = "plot",
+        strip.text = element_text(face = "bold", hjust = 0)))
+```
+
+This report documents work package 4.2 of the Preliminary Study. It is generated
+by `scripts/02_eda.R` (tables) and this file (report) from the datasets of WP 4.1;
+every number below is computed, not typed.
+
+# 1 Data
+
+The analysis uses the national weekly series (`r nrow(national)` ISO weeks,
+`r min(national$iso_week)` to `r max(national$iso_week)`,
+`r dplyr::n_distinct(national$season)` seasons) and the stratified long table
+(`r format(nrow(strata), big.mark = ",")` rows). Seasons run from W40 to W39.
+Summary statistics across seasons exclude the incomplete season
+`r paste(EDA_INCOMPLETE_SEASONS, collapse = ", ")` and
+`r EDA_NO_SEASON` (no influenza circulation); both are still shown and flagged. Season
+2025/26 is included: only the off-season weeks W38–W39 are missing.
+
+```{r seasons-table}
+national |>
+  dplyr::group_by(season, period) |>
+  dplyr::summarise(weeks = dplyr::n(),
+                   complete = dplyr::first(complete_season),
+                   in_summary = dplyr::first(in_summary),
+                   test_season = dplyr::first(test_season),
+                   .groups = "drop") |>
+  knitr::kable(col.names = c("Season", "Period", "Weeks", "Complete",
+                             "In summary statistics", "Test season"))
+```
+
+# 2 Seasonal patterns
+
+*(next step)*
+
+# 3 Peak timing and intensity
+
+*(next step)*
+
+# 4 Season onset and end
+
+*(next step)*
+
+# 5 Unusual observations
+
+*(next step)*
+
+# 6 Regional variation
+
+*(next step)*
+
+# 7 Key findings for WP 4.3–4.5
+
+*(next step)*

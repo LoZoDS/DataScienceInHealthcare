@@ -5,7 +5,7 @@ The project plan (Preliminary Study, Table 1) gives every work package a respons
 | WP | Branch | Author → reviewer |
 |---|---|---|
 | 4.1 Data preparation | `LZo` | L. Zovkic → S. Ryf |
-| 4.2 Exploratory analysis | `wp42-exploratory` | S. Ryf → L. Zovkic |
+| 4.2 Exploratory analysis | `SRy` | S. Ryf → L. Zovkic |
 | 4.3 Lag analysis | `wp43-lag-analysis` | H. Wang → Q. Xu |
 | 4.4/4.5 Forecasting | `wp44-forecasting` | Q. Xu → H. Wang |
 

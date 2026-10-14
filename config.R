@@ -53,3 +53,17 @@ TEST_SEASONS <- c("2023/24", "2024/25", "2025/26")
 # Permanent resident population at 31 December of the respective year (BFS,
 # STATPOP). Years without a value (e.g. 2026) use the latest available year.
 POPULATION_FALLBACK_TO_LATEST <- TRUE
+
+# EDA (4.2)
+"Seasons left out of summary statistics across seasons (means, medians, SD of
+peak week): 2012/13 (starts in W01, onset and early weeks missing) and the
+season without influenza circulation. 2025/26 stays in: only the off-season
+# weeks W38-W39 are missing. All seasons stay in tables and figures, flagged."
+EDA_INCOMPLETE_SEASONS  <- c("2012/13")
+EDA_NO_SEASON           <- c("2020/21")
+# Weeks affected by the COVID-19 lockdown at the end of season 2019/20
+# (feedback on WP 4.1): 2020-W11 to the end of the season; flagged, not removed.
+EDA_LOCKDOWN_WEEKS_2020 <- sprintf("2020-W%02d", 11:39)   # until end of season 2019/20
+# Colours used throughout the project (CONTRIBUTING.md)
+COL_OBLIG <- "#2a78d6"   # mandatory reporting
+COL_SENT  <- "#eb6834"   # Sentinella
