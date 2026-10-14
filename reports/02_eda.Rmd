@@ -140,8 +140,15 @@ periods |>
                caption = "Weekly values per period")
 ```
 
-*Interpretation (tbd): typical start, peak and end of the season;
-level shift after 2020; how much seasons differ from each other.*
+**Interpretation.** Influenza activity shows a clear seasonal pattern in both
+systems: activity starts to rise in December, peaks between late December and
+February and goes down to baseline by April. After 2020, the typical season has shifted:
+the median curve of mandatory reporting peaks around W52 in 2022/23–2025/26
+compared with W05 before 2020, and Sentinella shows the same shift (W01 vs W07).
+The level of mandatory reporting has roughly doubled (median weekly peak curve
+26 vs 11 cases per 100'000), while the Sentinella ILI rate has not risen
+(29 vs 35 per 1'000 consultations). The seasons vary considerably in terms of their timing
+and intensity, so a single “average season” does not, on its own, represent a reliable forecast.
 
 # 3 Peak timing and intensity
 
@@ -218,9 +225,16 @@ comes first. The largest gaps are in
 `r paste(peaks$season[abs(peaks$peak_lag_weeks) >= 4], collapse = ", ")` (see
 section 5).
 
-*Interpretation (tbd): peak timing pre vs post 2020; higher oblig peaks
-after 2020 partly reflect more testing (compare with Sentinella); relevance of
-the peak lag for WP 4.3.*
+**Interpretation.** Before 2020 the oblig peak fell on average in season week
+19 (about W06, SD 3.9 weeks, range W01–W11); from 2022/23 it came about three
+to four weeks earlier (about W02, SD 2.8 weeks). Peak intensity in mandatory
+reporting more than doubled (median 35 vs 16 cases per 100'000), where the
+Sentinella peak stayed at the same level (median 41 vs 44 per 1'000
+consultations). The higher oblig peaks therefore mainly shows more testing,
+not more severe influenza seasons. In most seasons both systems peak in the same
+week or Sentinella leads by one week; larger gaps occur only in 2015/16 and
+2023/24 (section 5). This suggests short lags of 0–1 weeks for WP 4.3, with
+season-specific exceptions.
 
 # 4 Season onset and end
 
@@ -292,10 +306,16 @@ national |>
        subtitle = "Dashed: MEM threshold from earlier seasons. Grey: onset to end")
 ```
 
-*Interpretation (tbd): onset and duration pre vs post 2020; in 2020/21
-the threshold is exceeded although almost no influenza circulated (ILI captures
-SARS-CoV-2, see section 5); share of oblig cases inside the window; in-season
-weeks for WP 4.5 in `output/eda/in_season_weeks.csv`.*
+**Interpretation.** With a MEM threshold, seasons start between W47 and W02
+and last 10–17 weeks in regular seasons (21 weeks in 2021/22). The threshold
+rises after 2020 (from 71 to 83 per 100,000) because the Sentinella baseline is
+higher (section 5), not because influenza seasons are stronger. The Sentinella
+window contains 80–93% of the lab-confirmed cases of a season and always
+includes the oblig peak, so it is a reasonable definition of in-season weeks for
+both systems. Exceptions: in 2020/21 the threshold was exceeded without
+influenza circulation, and the end of 2019/20 (W14) falls into the lockdown
+weeks and is uncertain. The in-season weeks for WP 4.5 are in
+`output/eda/in_season_weeks.csv`; All three test periods have a projected MEM threshold.
 
 # 5 Unusual observations
 
@@ -399,11 +419,34 @@ reg_sum |>
                caption = "Regional peaks relative to the national peak (seasons in summary statistics)")
 ```
 
-*Interpretation (tbd): regional peaks mostly within ±1–2 weeks of the
-national peak; no region leads consistently enough to justify regional
-predictors; region 6 shows the highest and noisiest values (fewest practices).
-Canton assignment of the Sentinella regions to be confirmed (config.R).*
+**Interpretation.** Regional peaks mostly appear in the same week as the national
+peak or one to two weeks around it (median difference 0–1 week per region). No
+region leads the national peak consistently, which supports the national focus
+of the forecasting models and the decision not to use regional predictors.
+Large deviations (up to ±16 weeks) occur only in the COVID-19 seasons.
+Region 6 shows much higher peak values than the other regions, which probably
+reflects fewer participating practices and therefore noisier extrapolated rates.
+The canton assignment of the Sentinella regions still needs to be confirmed
+(config.R).
 
 # 7 Key findings for WP 4.3–4.5
 
-*(next step)*
+1. **Clear seasonality, shifted after 2020.** Both systems show one winter wave
+   per season; after 2020 the peak comes about three to four weeks earlier
+   (around W02 instead of W06).
+2. **Level shift in mandatory reporting only.** Oblig peaks have roughly doubled
+   since 2022/23, Sentinella peaks have not. This supports the `post2020`
+   indicator in all models (WP 4.4).
+3. **Short lag between the systems.** In most seasons both systems peak in the
+   same week or Sentinella leads by one week; lags of 0–1 weeks are the most
+   plausible candidates for WP 4.3, with exceptions in 2015/16 and 2023/24.
+4. **ILI is less influenza-specific after 2020.** The off-season ILI baseline is
+   about ten times higher and in 2020/21 the threshold was exceeded without
+   influenza; the relationship between the systems should be analysed separately
+   before and after 2020 (WP 4.3).
+5. **Season boundaries for evaluation.** MEM reproduces the FOPH/BAG thresholds
+   and onset weeks for the pre-2020 seasons and provides prospective thresholds
+   for all test seasons; in-season weeks for WP 4.5 are provided.
+6. **Holiday weeks distort the predictor.** Total consultations drop to about
+   60% around New Year, which can inflate the ILI rate per 1,000 consultations
+   (WP 4.4).
