@@ -28,6 +28,13 @@ typical  <- typical_season(national)
 peaks    <- peaks_per_season(national)
 peak_sum <- peak_summary(peaks)
 long     <- national_long(national)
+bag_th   <- readr::read_csv(file.path(PATH_REFERENCE, "epidemic_thresholds.csv"),
+                            comment = "#", show_col_types = FALSE)
+reported <- readr::read_csv(file.path(PATH_REFERENCE, "bag_reported_values.csv"),
+                            comment = "#", show_col_types = FALSE)
+mem_th     <- mem_thresholds(national)
+validation <- mem_validation(national, mem_th, bag_th, reported)
+boundaries <- boundaries_both_systems(national, mem_th, peaks)
 
 # Colours: systems as in CONTRIBUTING.md; periods in neutral greys (+ line type)
 COL_SYSTEM <- setNames(c(COL_OBLIG, COL_SENT), SYSTEM_LABELS)
@@ -212,7 +219,78 @@ the peak lag for WP 4.3.*
 
 # 4 Season onset and end
 
-*(next step)*
+**Method.** Section 4.2 defines the onset as the first of two consecutive weeks
+in which the Sentinella ILI rate exceeds the FOPH/BAG epidemic threshold of the
+season, and the end as the last week above it. FOPH/BAG has not published an
+ILI threshold since 2020/21, so – as agreed by the team – the threshold is
+estimated with the Moving Epidemic Method (MEM; Vega et al. 2013, R package
+`mem`), on the same scale as the FOPH/BAG threshold (ILI consultations per
+100,000 inhabitants). For each season the threshold is estimated **only from
+earlier seasons** (at most `r MEM_MAX_SEASONS`, at least `r MEM_MIN_SEASONS`;
+complete seasons without COVID-19 seasons and without the lockdown weeks 2020),
+so no information from the season itself is used. With fewer than
+`r MEM_MIN_SEASONS` earlier seasons the estimate is unstable, therefore MEM
+thresholds are available from `r min(mem_th$season[!is.na(mem_th$threshold_ili_per_100k)])`
+onwards, which covers all test seasons.
+
+**Validation against FOPH/BAG.** Estimated from all seven pre-2020 seasons, MEM
+gives a threshold of `r round(validation$mem_retro_threshold[1], 1)` per 100,000,
+within the range of the published FOPH/BAG thresholds
+(`r min(bag_th$threshold_ili_per_100k, na.rm = TRUE)`–`r max(bag_th$threshold_ili_per_100k, na.rm = TRUE)`).
+With this threshold, the onset rule reproduces the onset week reported by
+FOPH/BAG in `r with(validation, sum(onset_mem_retro == onset_reported, na.rm = TRUE))` of
+`r sum(!is.na(validation$onset_reported))` seasons; the prospective MEM
+thresholds reproduce it in both seasons where they are available.
+
+```{r tab-mem-validation}
+validation |>
+  dplyr::transmute(season, bag_threshold,
+                   mem_threshold = round(mem_threshold, 1),
+                   mem_retro = round(mem_retro_threshold, 1),
+                   onset_reported, onset_bag, onset_mem, onset_mem_retro) |>
+  knitr::kable(col.names = c("Season", "FOPH/BAG threshold", "MEM (prospective)",
+                             "MEM (all pre-2020)", "Onset reported by FOPH/BAG",
+                             "Onset with FOPH/BAG threshold", "Onset with MEM (prospective)",
+                             "Onset with MEM (all pre-2020)"),
+               caption = "Thresholds per 100,000 inhabitants and resulting onset weeks, pre-2020 seasons")
+```
+
+```{r tab-boundaries}
+boundaries |>
+  dplyr::filter(!is.na(threshold)) |>
+  dplyr::transmute(season, threshold = round(threshold, 1), onset_week, end_week,
+                   duration_weeks, sent_peak_week, oblig_peak_week,
+                   share = sprintf("%.0f%%", 100 * oblig_share_in_window)) |>
+  knitr::kable(col.names = c("Season", "MEM threshold", "Onset", "End", "Duration (weeks)",
+                             "Peak Sentinella", "Peak oblig", "Oblig cases in window"),
+               caption = "Season boundaries from Sentinella (MEM), applied to mandatory reporting")
+```
+
+```{r fig-boundaries, fig.height = 7}
+win <- boundaries |>
+  dplyr::filter(!is.na(threshold)) |>
+  dplyr::left_join(dplyr::distinct(national, season, onset_week = iso_week, on_sw = season_week),
+                   by = c("season", "onset_week")) |>
+  dplyr::left_join(dplyr::distinct(national, season, end_week = iso_week, end_sw = season_week),
+                   by = c("season", "end_week"))
+national |>
+  dplyr::filter(season %in% win$season) |>
+  ggplot(aes(season_week, sentinella_ili_inc)) +
+  geom_rect(data = win, aes(xmin = on_sw - 0.5, xmax = end_sw + 0.5, ymin = -Inf, ymax = Inf),
+            inherit.aes = FALSE, fill = "grey90") +
+  geom_hline(data = win, aes(yintercept = threshold), linetype = "22", colour = "grey35") +
+  geom_line(colour = COL_SENT, linewidth = 0.6) +
+  facet_wrap(~ season, ncol = 2) +
+  scale_x_continuous(breaks = sw_breaks, labels = season_week_label(sw_breaks)) +
+  labs(x = NULL, y = "ILI consultations per 100,000",
+       title = "Season window per season (Sentinella, MEM threshold)",
+       subtitle = "Dashed: MEM threshold from earlier seasons. Grey: onset to end")
+```
+
+*Interpretation (tbd): onset and duration pre vs post 2020; in 2020/21
+the threshold is exceeded although almost no influenza circulated (ILI captures
+SARS-CoV-2, see section 5); share of oblig cases inside the window; in-season
+weeks for WP 4.5 in `output/eda/in_season_weeks.csv`.*
 
 # 5 Unusual observations
 

@@ -119,7 +119,59 @@ relevance of the peak lag for WP 4.3.*
 
 # 4 Season onset and end
 
-*(next step)*
+**Method.** Section 4.2 defines the onset as the first of two
+consecutive weeks in which the Sentinella ILI rate exceeds the FOPH/BAG
+epidemic threshold of the season, and the end as the last week above it.
+FOPH/BAG has not published an ILI threshold since 2020/21, so – as
+agreed by the team – the threshold is estimated with the Moving Epidemic
+Method (MEM; Vega et al. 2013, R package `mem`), on the same scale as
+the FOPH/BAG threshold (ILI consultations per 100,000 inhabitants). For
+each season the threshold is estimated **only from earlier seasons** (at
+most 10, at least 5; complete seasons without COVID-19 seasons and
+without the lockdown weeks 2020), so no information from the season
+itself is used. With fewer than 5 earlier seasons the estimate is
+unstable, therefore MEM thresholds are available from 2018/19 onwards,
+which covers all test seasons.
+
+**Validation against FOPH/BAG.** Estimated from all seven pre-2020
+seasons, MEM gives a threshold of 71.2 per 100,000, within the range of
+the published FOPH/BAG thresholds (64–74). With this threshold, the
+onset rule reproduces the onset week reported by FOPH/BAG in 4 of 5
+seasons; the prospective MEM thresholds reproduce it in both seasons
+where they are available.
+
+| Season | FOPH/BAG threshold | MEM (prospective) | MEM (all pre-2020) | Onset reported by FOPH/BAG | Onset with FOPH/BAG threshold | Onset with MEM (prospective) | Onset with MEM (all pre-2020) |
+|:---|---:|---:|---:|:---|:---|:---|:---|
+| 2013/14 | 74 | NA | 71.2 | 2014-W04 | 2014-W05 | NA | 2014-W04 |
+| 2014/15 | 70 | NA | 71.2 | NA | 2015-W02 | NA | 2015-W02 |
+| 2015/16 | NA | NA | 71.2 | NA | NA | NA | 2016-W02 |
+| 2016/17 | 64 | NA | 71.2 | 2016-W50 | 2016-W50 | NA | 2016-W51 |
+| 2017/18 | 68 | NA | 71.2 | 2017-W51 | 2017-W51 | NA | 2017-W51 |
+| 2018/19 | 68 | 65.7 | 71.2 | 2019-W02 | 2019-W02 | 2019-W02 | 2019-W02 |
+| 2019/20 | 69 | 69.2 | 71.2 | 2020-W02 | 2020-W02 | 2020-W02 | 2020-W02 |
+
+Thresholds per 100,000 inhabitants and resulting onset weeks, pre-2020
+seasons
+
+| Season | MEM threshold | Onset | End | Duration (weeks) | Peak Sentinella | Peak oblig | Oblig cases in window |
+|:---|---:|:---|:---|---:|:---|:---|:---|
+| 2018/19 | 65.7 | 2019-W02 | 2019-W12 | 11 | 2019-W07 | 2019-W07 | 89% |
+| 2019/20 | 69.2 | 2020-W02 | 2020-W14 | 13 | 2020-W06 | 2020-W05 | 93% |
+| 2020/21 | 71.2 | 2020-W43 | 2020-W51 | 9 | 2020-W44 | 2020-W51 | 58% |
+| 2021/22 | 71.2 | 2021-W47 | 2022-W15 | 21 | 2022-W11 | 2022-W12 | 89% |
+| 2022/23 | 71.2 | 2022-W48 | 2023-W12 | 17 | 2022-W52 | 2022-W51 | 92% |
+| 2023/24 | 73.1 | 2023-W47 | 2024-W08 | 14 | 2023-W52 | 2024-W04 | 86% |
+| 2024/25 | 79.1 | 2025-W01 | 2025-W11 | 11 | 2025-W06 | 2025-W05 | 80% |
+| 2025/26 | 82.8 | 2025-W49 | 2026-W06 | 10 | 2026-W01 | 2026-W01 | 86% |
+
+Season boundaries from Sentinella (MEM), applied to mandatory reporting
+
+![](figures/02_fig-boundaries-1.png)<!-- -->
+
+*Interpretation (tbd): onset and duration pre vs post 2020; in 2020/21
+the threshold is exceeded although almost no influenza circulated (ILI
+captures SARS-CoV-2, see section 5); share of oblig cases inside the
+window; in-season weeks for WP 4.5 in `output/eda/in_season_weeks.csv`.*
 
 # 5 Unusual observations
 

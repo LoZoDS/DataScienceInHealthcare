@@ -55,7 +55,20 @@ message(sprintf("Peaks: %d seasons; Sentinella peak earlier than oblig in %d, sa
                 sum(peaks$peak_lag_weeks < 0)))
 
 # 4. Season onset and end (MEM)
-# (next step)
+# Threshold per season from earlier seasons only (Moving Epidemic Method), then the onset/end rule of Section 4.2; the Sentinella window is applied to oblig.
+bag_thresholds <- thresholds
+reported <- readr::read_csv(file.path(PATH_REFERENCE, "bag_reported_values.csv"),
+                            comment = "#", show_col_types = FALSE)
+mem_th     <- mem_thresholds(national)
+validation <- mem_validation(national, mem_th, bag_thresholds, reported)
+boundaries <- boundaries_both_systems(national, mem_th, peaks)
+in_season  <- in_season_weeks(national, boundaries)
+readr::write_csv(mem_th,     file.path(PATH_EDA, "mem_thresholds.csv"))
+readr::write_csv(validation, file.path(PATH_EDA, "mem_validation.csv"))
+readr::write_csv(boundaries, file.path(PATH_EDA, "season_boundaries.csv"))
+readr::write_csv(in_season,  file.path(PATH_EDA, "in_season_weeks.csv"))   # for WP 4.5
+message(sprintf("MEM: thresholds for %d seasons; retrospective pre-2020 threshold %.1f per 100,000",
+                sum(!is.na(mem_th$threshold_ili_per_100k)), validation$mem_retro_threshold[1]))
 
 # 5. Unusual observations
 # (next step)

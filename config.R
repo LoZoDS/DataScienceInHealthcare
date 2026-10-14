@@ -70,3 +70,7 @@ COL_SENT  <- "#eb6834"   # Sentinella
 # Display names of the two systems in tables and figures
 SYSTEM_LABELS <- c("Mandatory reporting (cases per 100,000)",
                    "Sentinella (ILI per 1,000 consultations)")
+# Moving Epidemic Method (R package mem), Section 4.2 / team decision on WP 4.1:
+# threshold for each season estimated only from earlier complete, non-COVID seasons
+MEM_MIN_SEASONS <- 5L    # fewer earlier seasons -> no MEM threshold (estimate unstable)
+MEM_MAX_SEASONS <- 10L   # mem default: the 10 most recent seasons

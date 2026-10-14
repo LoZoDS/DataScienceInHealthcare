@@ -154,3 +154,112 @@ season_week_label <- function(sw) {
   wk <- (sw + SEASON_START_WEEK - 2) %% 52 + 1
   sprintf("W%02d", wk)
 }
+
+# Season onset and end with the Moving Epidemic Method MEM
+
+# MEM input: one column per season, one row per week within season (1-52),
+# Sentinella ILI consultations per 100,000 inhabitants (scale of the FOPH/BAG threshold).
+# Lockdown weeks 2020 are set to NA. Week 53 of 53-week seasons (an off-season week in September) is left out, as MEM needs equal lengths.
+mem_input <- function(national) {
+  national |>
+    dplyr::filter(season_week <= 52) |>
+    dplyr::mutate(value = ifelse(lockdown_2020, NA_real_, sentinella_ili_inc)) |>
+    dplyr::select(season, season_week, value) |>
+    tidyr::pivot_wider(names_from = season, values_from = value) |>
+    dplyr::arrange(season_week)
+}
+
+# Seasons that can serve as MEM training data: complete seasons with influenza circulation, excluding the COVID-19 seasons
+mem_training_seasons <- function(national) {
+  national |>
+    dplyr::distinct(season, complete_season, covid_season, in_summary) |>
+    dplyr::filter(complete_season, !covid_season, in_summary) |>
+    dplyr::pull(season) |>
+    sort()
+}
+
+# Prospective MEM threshold for every season: estimated only from earlier seasons (no leakage), at most MEM_MAX_SEASONS, at least MEM_MIN_SEASONS.
+# Returns one row per season with the pre-epidemic threshold (used for onset and end),
+# the post-epidemic threshold and the intensity thresholds (medium / high / very high), all per 100,000 inhabitants.
+mem_thresholds <- function(national, min_seasons = MEM_MIN_SEASONS,
+                           max_seasons = MEM_MAX_SEASONS) {
+  wide     <- mem_input(national)
+  training <- mem_training_seasons(national)
+  targets  <- setdiff(sort(unique(national$season)), EDA_INCOMPLETE_SEASONS)
+  rows <- lapply(targets, function(s) {
+    train <- utils::tail(training[training < s], max_seasons)
+    out <- tibble::tibble(season = s, n_train = length(train),
+                          train_seasons = paste(train, collapse = ", "),
+                          threshold_ili_per_100k = NA_real_, post_threshold = NA_real_,
+                          intensity_medium = NA_real_, intensity_high = NA_real_,
+                          intensity_very_high = NA_real_)
+    if (length(train) < min_seasons) return(out)
+    m <- mem::memmodel(as.data.frame(wide[, train]))
+    out$threshold_ili_per_100k <- m$epidemic.thresholds[1]
+    out$post_threshold         <- m$epidemic.thresholds[2]
+    out[c("intensity_medium", "intensity_high", "intensity_very_high")] <-
+      as.list(m$intensity.thresholds)
+    out
+  })
+  dplyr::bind_rows(rows)
+}
+
+# Retrospective MEM threshold from all pre-2020 seasons, used only to validate MEM against the thresholds published by FOPH/BAG (not for the analysis)
+mem_threshold_pre2020 <- function(national) {
+  train <- intersect(mem_training_seasons(national), PRE_2020_SEASONS)
+  m <- mem::memmodel(as.data.frame(mem_input(national)[, train]))
+  m$epidemic.thresholds[1]
+}
+
+# Season boundaries (rule of Section 4.2, function season_boundaries() from WP 4.1) with duration and the Sentinella window applied to mandatory reporting:
+#   duration_weeks       onset to end, inclusive
+#   oblig_share_in_window share of the season's oblig cases inside the window
+#   oblig_peak_in_window  oblig peak lies inside the window
+boundaries_both_systems <- function(national, thresholds, peaks) {
+  b <- season_boundaries(national, thresholds) |>
+    dplyr::mutate(duration_weeks = ifelse(
+      is.na(onset_week), NA_integer_,
+      match(end_week, national$iso_week) - match(onset_week, national$iso_week) + 1L))
+  window <- national |>
+    dplyr::left_join(dplyr::select(b, season, onset_week, end_week), by = "season") |>
+    dplyr::mutate(in_window = !is.na(onset_week) & iso_week >= onset_week & iso_week <= end_week) |>
+    dplyr::group_by(season) |>
+    dplyr::summarise(oblig_share_in_window = ifelse(all(is.na(onset_week)), NA_real_,
+                                                    sum(oblig_cases[in_window]) / sum(oblig_cases)),
+                     .groups = "drop")
+  b |>
+    dplyr::left_join(window, by = "season") |>
+    dplyr::left_join(dplyr::select(peaks, season, oblig_peak_week, sent_peak_week), by = "season") |>
+    dplyr::mutate(oblig_peak_in_window = oblig_peak_week >= onset_week & oblig_peak_week <= end_week)
+}
+
+# Weekly flag: in_season = week lies between MEM onset and end
+in_season_weeks <- function(national, boundaries) {
+  national |>
+    dplyr::select(iso_week, season, test_season) |>
+    dplyr::left_join(dplyr::select(boundaries, season, onset_week, end_week), by = "season") |>
+    dplyr::mutate(in_season = !is.na(onset_week) & iso_week >= onset_week & iso_week <= end_week) |>
+    dplyr::select(iso_week, season, test_season, in_season)
+}
+
+# Validation of MEM against FOPH/BAG (pre-2020 seasons): thresholds and the resulting onset weeks
+# with (a) the published FOPH/BAG threshold, (b) the prospective MEM threshold and
+# (c) the retrospective MEM threshold from all pre-2020 seasons, next to the onset week reported by FOPH/BAG.
+mem_validation <- function(national, mem_th, bag_th, reported) {
+  retro <- mem_threshold_pre2020(national)
+  retro_th <- tibble::tibble(season = PRE_2020_SEASONS, threshold_ili_per_100k = retro)
+  onset <- function(th, name) {
+    season_boundaries(national, th) |>
+      dplyr::select(season, !!name := onset_week)
+  }
+  tibble::tibble(season = PRE_2020_SEASONS) |>
+    dplyr::left_join(dplyr::select(bag_th, season, bag_threshold = threshold_ili_per_100k), by = "season") |>
+    dplyr::left_join(dplyr::select(mem_th, season, mem_threshold = threshold_ili_per_100k), by = "season") |>
+    dplyr::mutate(mem_retro_threshold = retro) |>
+    dplyr::left_join(reported |> dplyr::filter(reported_onset %in% TRUE) |>
+                       dplyr::transmute(season = iso_week_to_season(iso_week, SEASON_START_WEEK),
+                                        onset_reported = iso_week), by = "season") |>
+    dplyr::left_join(onset(bag_th, "onset_bag"), by = "season") |>
+    dplyr::left_join(onset(mem_th, "onset_mem"), by = "season") |>
+    dplyr::left_join(onset(retro_th, "onset_mem_retro"), by = "season")
+}
