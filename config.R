@@ -55,10 +55,10 @@ TEST_SEASONS <- c("2023/24", "2024/25", "2025/26")
 POPULATION_FALLBACK_TO_LATEST <- TRUE
 
 # EDA (4.2)
-"Seasons left out of summary statistics across seasons (means, medians, SD of
-peak week): 2012/13 (starts in W01, onset and early weeks missing) and the
-season without influenza circulation. 2025/26 stays in: only the off-season
-# weeks W38-W39 are missing. All seasons stay in tables and figures, flagged."
+# Seasons left out of summary statistics across seasons (means, medians, SD of
+# peak week): 2012/13 (starts in W01, onset and early weeks missing) and the
+# season without influenza circulation. 2025/26 stays in: only the off-season
+# weeks W38-W39 are missing. All seasons stay in tables and figures, flagged.
 EDA_INCOMPLETE_SEASONS  <- c("2012/13")
 EDA_NO_SEASON           <- c("2020/21")
 # Weeks affected by the COVID-19 lockdown at the end of season 2019/20
