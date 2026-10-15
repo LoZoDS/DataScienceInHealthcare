@@ -1,0 +1,7 @@
+region,region_label,seasons,median_diff_weeks,earlier,same,later,median_peak_ili_100k
+region_1,"Region 1 (GE, NE, VD, VS)",12,0,2,5,5,289.56500000000005
+region_2,"Region 2 (BE, FR, JU)",12,0,3,6,3,259.32500000000005
+region_3,"Region 3 (AG, BL, BS, SO)",12,1,0,5,7,314.345
+region_4,"Region 4 (LU, NW, OW, SZ, UR, ZG)",12,0,4,3,5,202.39
+region_5,"Region 5 (AI, AR, GL, SG, SH, TG, ZH)",12,0,2,6,4,280.79999999999995
+region_6,"Region 6 (GR, TI)",12,0,5,6,1,664.4549999999999

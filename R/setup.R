@@ -18,4 +18,4 @@ if (!file.exists("config.R")) {
   stop("Run this from the project root (open DataScienceInHealthcare.Rproj).")
 }
 source("config.R")
-for (f in c("R/time_utils.R", "R/load_data.R", "R/qc.R", "R/prepare.R")) source(f)
+for (f in c("R/time_utils.R", "R/load_data.R", "R/qc.R", "R/prepare.R", "R/eda.R")) source(f)

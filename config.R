@@ -53,3 +53,33 @@ TEST_SEASONS <- c("2023/24", "2024/25", "2025/26")
 # Permanent resident population at 31 December of the respective year (BFS,
 # STATPOP). Years without a value (e.g. 2026) use the latest available year.
 POPULATION_FALLBACK_TO_LATEST <- TRUE
+
+# EDA (4.2)
+# Seasons left out of summary statistics across seasons (means, medians, SD of
+# peak week): 2012/13 (starts in W01, onset and early weeks missing) and the
+# season without influenza circulation. 2025/26 stays in: only the off-season
+# weeks W38-W39 are missing. All seasons stay in tables and figures, flagged.
+EDA_INCOMPLETE_SEASONS  <- c("2012/13")
+EDA_NO_SEASON           <- c("2020/21")
+# Weeks affected by the COVID-19 lockdown at the end of season 2019/20
+# (feedback on WP 4.1): 2020-W11 to the end of the season; flagged, not removed.
+EDA_LOCKDOWN_WEEKS_2020 <- sprintf("2020-W%02d", 11:39)   # until end of season 2019/20
+# Colours used throughout the project (CONTRIBUTING.md)
+COL_OBLIG <- "#2a78d6"   # mandatory reporting
+COL_SENT  <- "#eb6834"   # Sentinella
+# Display names of the two systems in tables and figures
+SYSTEM_LABELS <- c("Mandatory reporting (cases per 100,000)",
+                   "Sentinella (ILI per 1,000 consultations)")
+# Moving Epidemic Method (R package mem), Section 4.2 / team decision on WP 4.1:
+# threshold for each season estimated only from earlier complete, non-COVID seasons
+MEM_MIN_SEASONS <- 5L    # fewer earlier seasons -> no MEM threshold (estimate unstable)
+MEM_MAX_SEASONS <- 10L   # mem default: the 10 most recent seasons
+# Sentinella regions (FOPH/BAG); labels for tables and figures.
+# TODO: confirm the canton assignment against the FOPH/BAG Sentinella documentation.
+SENTINELLA_REGIONS <- c(
+  region_1 = "Region 1 (GE, NE, VD, VS)",
+  region_2 = "Region 2 (BE, FR, JU)",
+  region_3 = "Region 3 (AG, BL, BS, SO)",
+  region_4 = "Region 4 (LU, NW, OW, SZ, UR, ZG)",
+  region_5 = "Region 5 (AI, AR, GL, SG, SH, TG, ZH)",
+  region_6 = "Region 6 (GR, TI)")
