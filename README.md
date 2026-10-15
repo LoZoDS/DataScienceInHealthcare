@@ -10,7 +10,7 @@ Authors: S. Ryf, H. Wang, Q. Xu, L. Zovkic · Examiner: Philip Hochuli
 | WP | Content | Responsible / feedback | Status |
 |---|---|---|---|
 | 4.1 | Data preparation, GitHub repository | L. Zovkic / S. Ryf | ✅ draft ready for feedback → [report](reports/01_data_preparation.md) |
-| 4.2 | Exploratory analysis (RQ1) | S. Ryf / L. Zovkic | open |
+| 4.2 | Exploratory analysis (RQ1) | S. Ryf / L. Zovkic | draft ready for feedback: [report](reports/02_eda.md)
 | 4.3 | Relationship and lag analysis (RQ2, H1) | H. Wang / Q. Xu | open |
 | 4.4, 4.5 | Forecasting and evaluation (RQ3, H2) | Q. Xu / H. Wang | open |
 
@@ -26,7 +26,7 @@ source("scripts/01_data_preparation.R")
 national <- readr::read_csv("data/processed/flu_weekly_national.csv")
 ```
 
-Run the tests with `testthat::test_dir("tests/testthat")`. Render the report with `rmarkdown::render("reports/01_data_preparation.Rmd")`.
+Run the tests with `testthat::test_dir("tests/testthat")`. Render the reports with `rmarkdown::render("reports/01_data_preparation.Rmd")` and `rmarkdown::render("reports/02_eda.Rmd")`.
 
 ## Repository structure
 
@@ -38,15 +38,18 @@ Run the tests with `testthat::test_dir("tests/testthat")`. Render the report wit
 │   ├── time_utils.R             ISO weeks, seasons (W40-W39)
 │   ├── load_data.R              raw file schemas and readers
 │   ├── qc.R                     quality checks
-│   └── prepare.R                national series, strata table, season boundaries
+│   ├── prepare.R                national series, strata table, season boundaries
+│   └── eda.R                    exploratory analysis: peaks, MEM thresholds, regions
 ├── scripts/                     numbered pipeline steps, run in order
 │   ├── 00_download_data.R       (optional) new download - overwrites frozen raw data
-│   └── 01_data_preparation.R    WP 4.1 -> data/processed, output/qc
+│   ├── 01_data_preparation.R    WP 4.1 -> data/processed, output/qc
+│   └── 02_eda.R                 WP 4.2 -> output/eda
 ├── data/
 │   ├── raw/                     FOPH/BAG exports, frozen vintage (never edit by hand)
 │   ├── reference/               BFS population, epidemic thresholds
 │   └── processed/               analysis-ready data (generated)
 ├── output/qc/                   quality-check tables (generated)
+├── output/eda/                  exploratory analysis tables (generated)
 ├── reports/                     R Markdown reports per WP (+ rendered .md for GitHub)
 ├── tests/testthat/              unit and data tests
 └── docs/                        data dictionary, open issues
