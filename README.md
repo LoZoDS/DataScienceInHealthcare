@@ -9,8 +9,8 @@ Authors: S. Ryf, H. Wang, Q. Xu, L. Zovkic · Examiner: Philip Hochuli
 
 | WP | Content | Responsible / feedback | Status |
 |---|---|---|---|
-| 4.1 | Data preparation, GitHub repository | L. Zovkic / S. Ryf | ✅ draft ready for feedback → [report](reports/01_data_preparation.md) |
-| 4.2 | Exploratory analysis (RQ1) | S. Ryf / L. Zovkic | draft ready for feedback: [report](reports/02_eda.md)
+| 4.1 | Data preparation, GitHub repository | L. Zovkic / S. Ryf | reviewed → [report](reports/01_data_preparation.md) |
+| 4.2 | Exploratory analysis (RQ1) | S. Ryf / L. Zovkic | reviewed: [report](reports/02_eda.md) |
 | 4.3 | Relationship and lag analysis (RQ2, H1) | H. Wang / Q. Xu | open |
 | 4.4, 4.5 | Forecasting and evaluation (RQ3, H2) | Q. Xu / H. Wang | open |
 
