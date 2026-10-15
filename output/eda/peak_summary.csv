@@ -1,4 +1,4 @@
-period,seasons,oblig_peak_sw_mean,oblig_peak_sw_sd,oblig_peak_sw_min,oblig_peak_sw_max,sent_peak_sw_mean,sent_peak_sw_sd,oblig_peak_median,sent_peak_median,lag_mean,lag_min,lag_max
-pre2020,7,18.857142857142858,3.933978962347216,14,25,18,2.7688746209726918,16.3028,43.6,0.8571428571428571,-1,5
-covid,1,25,NA,25,25,24,NA,18.2295,20.7,1,1,1
-post2020,4,15.25,2.753785273643051,12,18,14.75,2.8722813232690143,35.2192,40.900000000000006,0.5,-1,4
+period,seasons,oblig_peak_sw_mean,oblig_peak_sw_sd,oblig_peak_sw_min,oblig_peak_sw_max,sent_peak_sw_mean,sent_peak_sw_sd,oblig_peak_median,sent_peak_median,lag_mean,lag_min,lag_max,sent_inc_peak_sw_mean,lag_inc_mean,lag_inc_min,lag_inc_max
+pre2020,7,18.857142857142858,3.933978962347216,14,25,18,2.7688746209726918,16.3028,43.6,0.8571428571428571,-1,5,18.142857142857142,0.7142857142857143,-1,5
+covid,1,25,NA,25,25,24,NA,18.2295,20.7,1,1,1,24,1,1,1
+post2020,4,15.25,2.753785273643051,12,18,14.75,2.8722813232690143,35.2192,40.900000000000006,0.5,-1,4,16,-0.75,-1,0

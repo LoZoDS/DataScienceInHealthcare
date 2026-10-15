@@ -70,12 +70,15 @@ COL_SENT  <- "#eb6834"   # Sentinella
 # Display names of the two systems in tables and figures
 SYSTEM_LABELS <- c("Mandatory reporting (cases per 100,000)",
                    "Sentinella (ILI per 1,000 consultations)")
-# Moving Epidemic Method (R package mem), Section 4.2 / team decision on WP 4.1:
+# Holiday weeks with ~60% of the usual Sentinella consultations (WP 4.2, section 5)
+HOLIDAY_WEEKS <- c("W52", "W53", "W01")
+# Moving Epidemic Method (R package mem), Section 4.2 / team decision of 15.10.2026:
 # threshold for each season estimated only from earlier complete, non-COVID seasons
 MEM_MIN_SEASONS <- 5L    # fewer earlier seasons -> no MEM threshold (estimate unstable)
 MEM_MAX_SEASONS <- 10L   # mem default: the 10 most recent seasons
 # Sentinella regions (FOPH/BAG); labels for tables and figures.
-# TODO: confirm the canton assignment against the FOPH/BAG Sentinella documentation.
+# Canton assignment as in the FOPH/BAG weekly influenza report 03/2022
+# (grippe-wochenbericht-22-03-de.pdf, bag.admin.ch).
 SENTINELLA_REGIONS <- c(
   region_1 = "Region 1 (GE, NE, VD, VS)",
   region_2 = "Region 2 (BE, FR, JU)",

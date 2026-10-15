@@ -2,7 +2,7 @@
 title: "WP 4.2 – Exploratory Analysis"
 subtitle: "From Surveillance to Prediction: Forecasting Weekly Influenza Activity in Switzerland"
 author: "S. Ryf (responsible), L. Zovkic (feedback)"
-date: "17 October 2026"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
 output:
   github_document:
     toc: true
@@ -35,6 +35,14 @@ reported <- readr::read_csv(file.path(PATH_REFERENCE, "bag_reported_values.csv")
 mem_th     <- mem_thresholds(national)
 validation <- mem_validation(national, mem_th, bag_th, reported)
 boundaries <- boundaries_both_systems(national, mem_th, peaks)
+desc_th    <- descriptive_thresholds(national, mem_th)
+desc_bound <- boundaries_both_systems(national, desc_th, peaks) |>
+  dplyr::left_join(dplyr::select(desc_th, season, threshold_source), by = "season")
+onset_sum  <- onset_summary(desc_bound, national)
+lc  <- lag_counts(peaks, "peak_lag_weeks")
+lci <- lag_counts(peaks, "peak_lag_inc_weeks")
+pk_sum  <- dplyr::filter(peaks, in_summary)
+n_close <- sum(abs(pk_sum$peak_lag_inc_weeks) <= 1)
 types         <- type_by_season(strata)
 baseline      <- offseason_baseline(national)
 consultations <- consultation_volume(national)
@@ -157,18 +165,27 @@ Peak week = week of maximum weekly value, peak intensity = that maximum
 maximum, the first is used. The peak lag is the oblig peak week minus the
 Sentinella peak week (positive: Sentinella peaks earlier).
 
+For Sentinella the peak week is determined on two scales. The study predictor,
+ILI per 1,000 consultations, is a *share* of all consultations; in the holiday
+weeks W52/W53/W01 total consultations drop to about 60% (section 5), which
+inflates this share. As a robustness check the peak week is therefore also
+determined on ILI consultations per 100,000 inhabitants, which is not affected
+by the drop in total consultations.
+
 ```{r tab-peaks}
 peaks |>
   dplyr::transmute(season, period,
                    oblig_peak_week, oblig_peak = round(oblig_peak_value, 1),
                    sent_peak_week, sent_peak = round(sent_peak_value, 1),
                    peak_lag_weeks,
+                   sent_inc_peak_week, peak_lag_inc_weeks,
                    note = dplyr::case_when(!complete_season ~ "incomplete season",
                                            !in_summary ~ "no influenza season",
                                            test_season ~ "test season",
                                            TRUE ~ "")) |>
   knitr::kable(col.names = c("Season", "Period", "Peak week (oblig)", "Peak (cases/100k)",
-                             "Peak week (Sentinella)", "Peak (ILI/1,000)", "Lag (weeks)", "Note"))
+                             "Peak week (Sentinella, per 1,000 cons.)", "Peak (ILI/1,000)", "Lag (weeks)",
+                             "Peak week (Sentinella, per 100,000)", "Lag (weeks, per 100,000)", "Note"))
 ```
 
 ```{r fig-peak-week, fig.height = 5}
@@ -211,37 +228,48 @@ peak_sum |>
                    sent_week  = sprintf("%s (SD %.1f)", season_week_label(round(sent_peak_sw_mean)), sent_peak_sw_sd),
                    oblig_peak = round(oblig_peak_median, 1),
                    sent_peak  = round(sent_peak_median, 1),
-                   lag = sprintf("%.1f (%d to %d)", lag_mean, lag_min, lag_max)) |>
+                   lag = sprintf("%.1f (%d to %d)", lag_mean, lag_min, lag_max),
+                   lag_inc = sprintf("%.1f (%d to %d)", lag_inc_mean, lag_inc_min, lag_inc_max)) |>
   knitr::kable(col.names = c("Period", "Seasons", "Mean peak week oblig (SD in weeks, range)",
                              "Mean peak week Sentinella (SD)", "Median peak oblig", "Median peak Sentinella",
-                             "Mean lag in weeks (range)"),
+                             "Mean lag in weeks (range)", "Mean lag per 100,000 (range)"),
                caption = "Peak timing and intensity by period (seasons in summary statistics only)")
 ```
 
-In `r sum(peaks$peak_lag_weeks > 0)` of `r nrow(peaks)` seasons the Sentinella
-peak comes before the oblig peak, in `r sum(peaks$peak_lag_weeks == 0)` both
-peak in the same week and in `r sum(peaks$peak_lag_weeks < 0)` the oblig peak
-comes first. The largest gaps are in
-`r paste(peaks$season[abs(peaks$peak_lag_weeks) >= 4], collapse = ", ")` (see
-section 5).
+With ILI per 1,000 consultations, the Sentinella peak comes before the oblig
+peak in `r lc[["earlier"]]` of `r nrow(peaks)` seasons, in the same week in
+`r lc[["same"]]` and after it in `r lc[["later"]]`. With ILI per 100,000
+inhabitants the counts are `r lci[["earlier"]]`, `r lci[["same"]]` and
+`r lci[["later"]]`. The two scales disagree in
+`r sum(peaks$sent_peak_week != peaks$sent_inc_peak_week)` seasons; in
+`r sum(peaks$sent_peak_holiday)` seasons
+(`r paste(peaks$season[peaks$sent_peak_holiday], collapse = ", ")`) the peak per
+1,000 consultations falls into a holiday week, on the per-100,000 scale in none.
 
 **Interpretation.** Before 2020 the oblig peak fell on average in season week
 19 (about W06, SD 3.9 weeks, range W01–W11); from 2022/23 it came about three
 to four weeks earlier (about W02, SD 2.8 weeks). Peak intensity in mandatory
 reporting more than doubled (median 35 vs 16 cases per 100'000), where the
 Sentinella peak stayed at the same level (median 41 vs 44 per 1'000
-consultations). The higher oblig peaks therefore mainly shows more testing,
-not more severe influenza seasons. In most seasons both systems peak in the same
-week or Sentinella leads by one week; larger gaps occur only in 2015/16 and
-2023/24 (section 5). This suggests short lags of 0–1 weeks for WP 4.3, with
-season-specific exceptions.
+consultations). The higher oblig peaks are therefore consistent with more
+testing rather than more severe influenza seasons. On the per-100,000 scale the
+peaks of both systems lie at most one week apart in `r n_close` of
+`r nrow(pk_sum)` seasons in summary statistics (exception: 2015/16, section 5),
+but the direction is not consistent: before 2020 Sentinella tends to peak
+slightly earlier, from 2022/23 slightly later (mean lag
+`r sprintf("%.1f", peak_sum$lag_inc_mean[peak_sum$period == "pre2020"])` vs
+`r sprintf("%.1f", peak_sum$lag_inc_mean[peak_sum$period == "post2020"])` weeks).
+Peak timing therefore shows that the systems are closely aligned, but it does
+not indicate a systematic Sentinella lead; whether Sentinella leads the
+mandatory reporting system is tested with the cross-correlation analysis of
+WP 4.3 (lags 0–3 weeks, as planned).
 
 # 4 Season onset and end
 
 **Method.** Section 4.2 defines the onset as the first of two consecutive weeks
 in which the Sentinella ILI rate exceeds the FOPH/BAG epidemic threshold of the
 season, and the end as the last week above it. FOPH/BAG has not published an
-ILI threshold since 2020/21, so – as agreed by the team – the threshold is
+ILI threshold since 2020/21, so – as decided by the team on 15.10.2026 – the threshold is
 estimated with the Moving Epidemic Method (MEM; Vega et al. 2013, R package
 `mem`), on the same scale as the FOPH/BAG threshold (ILI consultations per
 100,000 inhabitants). For each season the threshold is estimated **only from
@@ -259,7 +287,8 @@ within the range of the published FOPH/BAG thresholds
 With this threshold, the onset rule reproduces the onset week reported by
 FOPH/BAG in `r with(validation, sum(onset_mem_retro == onset_reported, na.rm = TRUE))` of
 `r sum(!is.na(validation$onset_reported))` seasons; the prospective MEM
-thresholds reproduce it in both seasons where they are available.
+thresholds reproduce it in both seasons where they are available (2018/19,
+2019/20).
 
 ```{r tab-mem-validation}
 validation |>
@@ -315,7 +344,61 @@ includes the oblig peak, so it is a reasonable definition of in-season weeks for
 both systems. Exceptions: in 2020/21 the threshold was exceeded without
 influenza circulation, and the end of 2019/20 (W14) falls into the lockdown
 weeks and is uncertain. The in-season weeks for WP 4.5 are in
-`output/eda/in_season_weeks.csv`; All three test periods have a projected MEM threshold.
+`output/eda/in_season_weeks.csv`; all three test seasons have a prospective MEM threshold.
+
+**Variation of onset across seasons (RQ1).** The prospective threshold needs at
+least `r MEM_MIN_SEASONS` earlier seasons and therefore gives an onset only from
+2018/19. For the descriptive question RQ1 leakage is irrelevant, so the
+seasons 2013/14–2017/18 use the retrospective MEM threshold from all pre-2020
+seasons (`r round(validation$mem_retro_threshold[1], 1)` per 100,000). These
+descriptive boundaries are used only for RQ1; the in-season weeks for WP 4.5
+remain the prospective ones above.
+
+```{r tab-onset-desc}
+desc_bound |>
+  dplyr::filter(!is.na(threshold)) |>
+  dplyr::transmute(season, threshold_source, threshold = round(threshold, 1),
+                   onset_week, end_week, duration_weeks) |>
+  knitr::kable(col.names = c("Season", "Threshold", "Threshold (per 100,000)", "Onset",
+                             "End", "Duration (weeks)"),
+               caption = "Season boundaries for RQ1 (all seasons)")
+```
+
+```{r tab-onset-summary}
+onset_sum |>
+  dplyr::transmute(period, seasons,
+                   onset = ifelse(seasons > 1,
+                                  sprintf("%s (SD %.1f weeks, %s to %s)",
+                                          season_week_label(round(onset_sw_mean)), onset_sw_sd,
+                                          season_week_label(onset_sw_min), season_week_label(onset_sw_max)),
+                                  season_week_label(round(onset_sw_mean))),
+                   end = season_week_label(round(end_sw_mean)),
+                   duration = sprintf("%.1f (%d to %d)", duration_mean, duration_min, duration_max)) |>
+  knitr::kable(col.names = c("Period", "Seasons", "Mean onset (SD, range)", "Mean end",
+                             "Mean duration in weeks (range)"),
+               caption = "Season onset, end and duration by period (seasons in summary statistics)")
+```
+
+```{r onset-numbers}
+os_pre  <- dplyr::filter(onset_sum, period == "pre2020")
+os_post <- dplyr::filter(onset_sum, period == "post2020")
+```
+
+Before 2020 the season started on average around
+`r season_week_label(round(os_pre$onset_sw_mean))` (SD
+`r sprintf("%.1f", os_pre$onset_sw_sd)` weeks, range
+`r season_week_label(os_pre$onset_sw_min)`–`r season_week_label(os_pre$onset_sw_max)`),
+from 2022/23 around `r season_week_label(round(os_post$onset_sw_mean))` (SD
+`r sprintf("%.1f", os_post$onset_sw_sd)` weeks, range
+`r season_week_label(os_post$onset_sw_min)`–`r season_week_label(os_post$onset_sw_max)`),
+i.e. about `r round(os_pre$onset_sw_mean - os_post$onset_sw_mean)` weeks earlier,
+in line with the earlier peaks (section 3). Outside the COVID-19 seasons the
+season lasts between `r min(c(os_pre$duration_min, os_post$duration_min))` and
+`r max(c(os_pre$duration_max, os_post$duration_max))` weeks. Onset thus varies
+by several weeks between seasons, somewhat less than peak timing (SD
+`r sprintf("%.1f", os_pre$onset_sw_sd)` vs
+`r sprintf("%.1f", peak_sum$oblig_peak_sw_sd[peak_sum$period == "pre2020"])` weeks
+before 2020).
 
 # 5 Unusual observations
 
@@ -355,17 +438,23 @@ hol <- consultations |> dplyr::filter(iso_wk %in% c(52, 53, 1))
    peak. That season was dominated by influenza B
    (`r round(100 * ty("2015/16", "share_B"))`% of cases), and both types peaked
    late (A: `r ty("2015/16", "peak_week_A")`, B: `r ty("2015/16", "peak_week_B")`)
-   although ILI consultations had already peaked. In 2023/24 Sentinella peaked
-   in `r peaks$sent_peak_week[peaks$season == "2023/24"]` while the influenza
-   peak followed in `r peaks$oblig_peak_week[peaks$season == "2023/24"]`; with
-   only `r round(100 * ty("2023/24", "share_B"))`% type B, the early ILI peak was
-   probably driven by other respiratory viruses.
+   although ILI consultations had already peaked. In 2023/24 the Sentinella
+   peak per 1,000 consultations falls in
+   `r peaks$sent_peak_week[peaks$season == "2023/24"]`, four weeks before the
+   oblig peak (`r peaks$oblig_peak_week[peaks$season == "2023/24"]`). This is a
+   holiday effect (observation 6): per 100,000 inhabitants ILI *fell* from
+   `r round(w("2023-W51", "sentinella_ili_inc"))` (W51) to
+   `r round(w("2023-W52", "sentinella_ili_inc"))` (W52) and peaked only in
+   `r peaks$sent_inc_peak_week[peaks$season == "2023/24"]`, one week after the
+   oblig peak.
 6. **Holiday weeks.** Around Christmas and New Year the total number of
    Sentinella consultations drops to about
    `r round(100 * min(hol$relative))`–`r round(100 * max(hol$relative))`% of a
    typical week. Because the predictor is a *share* of consultations (ILI per
-   1,000 consultations), it can rise in these weeks even if ILI cases do not
-   (relevant for WP 4.4).
+   1,000 consultations), it can rise in these weeks even if ILI cases do not.
+   This shifts the Sentinella peak into a holiday week in
+   `r sum(peaks$sent_peak_holiday)` seasons (section 3) and is relevant for the
+   predictor in WP 4.3/4.4.
 
 ```{r tab-types}
 types |>
@@ -426,8 +515,8 @@ of the forecasting models and the decision not to use regional predictors.
 Large deviations (up to ±16 weeks) occur only in the COVID-19 seasons.
 Region 6 shows much higher peak values than the other regions, which probably
 reflects fewer participating practices and therefore noisier extrapolated rates.
-The canton assignment of the Sentinella regions still needs to be confirmed
-(config.R).
+The canton assignment of the Sentinella regions follows the FOPH/BAG weekly
+influenza report 03/2022.
 
 # 7 Key findings for WP 4.3–4.5
 
@@ -437,16 +526,24 @@ The canton assignment of the Sentinella regions still needs to be confirmed
 2. **Level shift in mandatory reporting only.** Oblig peaks have roughly doubled
    since 2022/23, Sentinella peaks have not. This supports the `post2020`
    indicator in all models (WP 4.4).
-3. **Short lag between the systems.** In most seasons both systems peak in the
-   same week or Sentinella leads by one week; lags of 0–1 weeks are the most
-   plausible candidates for WP 4.3, with exceptions in 2015/16 and 2023/24.
+3. **Peaks closely aligned, no systematic lead.** On the per-100,000 scale the
+   peaks of both systems lie at most one week apart in `r n_close` of
+   `r nrow(pk_sum)` seasons (exception 2015/16), but Sentinella does not
+   consistently peak first (after 2020 rather one week later). The peak week on
+   the per-1,000-consultations scale is distorted by holiday weeks. Whether
+   Sentinella leads is left to the cross-correlation analysis of WP 4.3.
 4. **ILI is less influenza-specific after 2020.** The off-season ILI baseline is
    about ten times higher and in 2020/21 the threshold was exceeded without
    influenza; the relationship between the systems should be analysed separately
    before and after 2020 (WP 4.3).
-5. **Season boundaries for evaluation.** MEM reproduces the FOPH/BAG thresholds
-   and onset weeks for the pre-2020 seasons and provides prospective thresholds
-   for all test seasons; in-season weeks for WP 4.5 are provided.
+5. **Season boundaries.** The retrospective MEM threshold lies within the range
+   of the published FOPH/BAG thresholds and reproduces the reported onset week in
+   4 of 5 seasons (prospective MEM: 2 of 2). Prospective thresholds exist for all
+   test seasons; in-season weeks for WP 4.5 are provided. Onset varies by several
+   weeks between seasons and came about
+   `r round(os_pre$onset_sw_mean - os_post$onset_sw_mean)` weeks earlier after 2020 (RQ1).
 6. **Holiday weeks distort the predictor.** Total consultations drop to about
-   60% around New Year, which can inflate the ILI rate per 1,000 consultations
-   (WP 4.4).
+   60% around New Year, which inflates the ILI rate per 1,000 consultations and
+   shifts its peak into holiday weeks in `r sum(peaks$sent_peak_holiday)` seasons
+   (WP 4.3/4.4: consider a holiday indicator or a robustness check with ILI per
+   100,000).
