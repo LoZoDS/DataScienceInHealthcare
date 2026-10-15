@@ -1,0 +1,4 @@
+period,seasons,onset_sw_mean,onset_sw_sd,onset_sw_min,onset_sw_max,end_sw_mean,duration_mean,duration_min,duration_max
+pre2020,7,14.571428571428571,1.9023794624226837,12,17,24.857142857142858,11.285714285714286,7,15
+covid,1,8,NA,8,8,28,21,21,21
+post2020,4,10.25,2.6299556396765835,8,14,22.25,13,10,17

@@ -100,6 +100,12 @@ typical_season <- function(national) {
 # Peak week (week of maximum incidence) and peak intensity (maximum weekly incidence) per season, separately for both systems.
 # *_peak_sw       peak week as week within season (W40 = 1)
 # peak_lag_weeks  oblig peak week minus Sentinella peak week (> 0: Sentinella peaks earlier)
+# Sentinella peaks are determined on two scales:
+#   sent_*      ILI per 1,000 consultations (study predictor). In the holiday weeks
+#               W52/W53/W01 total consultations drop to ~60%, which inflates this share
+#               (section 5), so peaks can be shifted into the holiday weeks.
+#   sent_inc_*  ILI per 100,000 inhabitants (extrapolated, not affected by the drop in
+#               total consultations) - robustness check for peak timing and lag.
 # Ties: the first week with the maximum value is used.
 peaks_per_season <- function(national) {
   peak_of <- function(df, col) {
@@ -121,10 +127,22 @@ peaks_per_season <- function(national) {
     dplyr::rename_with(~ paste0("oblig_", .x), -season)
   s <- peak_of(national, "sentinella_ili_rate") |>
     dplyr::rename_with(~ paste0("sent_", .x), -season)
+  si <- peak_of(national, "sentinella_ili_inc") |>
+    dplyr::rename_with(~ paste0("sent_inc_", .x), -season)
   seasons |>
     dplyr::left_join(o, by = "season") |>
     dplyr::left_join(s, by = "season") |>
-    dplyr::mutate(peak_lag_weeks = oblig_peak_sw - sent_peak_sw)
+    dplyr::left_join(si, by = "season") |>
+    dplyr::mutate(peak_lag_weeks     = oblig_peak_sw - sent_peak_sw,
+                  peak_lag_inc_weeks = oblig_peak_sw - sent_inc_peak_sw,
+                  sent_peak_holiday  = substr(sent_peak_week, 6, 8) %in% HOLIDAY_WEEKS)
+}
+
+#' Count of seasons with Sentinella leading / same week / lagging, for one lag column
+lag_counts <- function(peaks, col) {
+  x <- peaks[[col]]
+  c(earlier = sum(x > 0, na.rm = TRUE), same = sum(x == 0, na.rm = TRUE),
+    later = sum(x < 0, na.rm = TRUE))
 }
 
 # Summary of peak timing and intensity across seasons, by period.
@@ -146,6 +164,10 @@ peak_summary <- function(peaks) {
       lag_mean           = mean(peak_lag_weeks),
       lag_min            = min(peak_lag_weeks),
       lag_max            = max(peak_lag_weeks),
+      sent_inc_peak_sw_mean = mean(sent_inc_peak_sw),
+      lag_inc_mean       = mean(peak_lag_inc_weeks),
+      lag_inc_min        = min(peak_lag_inc_weeks),
+      lag_inc_max        = max(peak_lag_inc_weeks),
       .groups = "drop")
 }
 
@@ -231,6 +253,41 @@ boundaries_both_systems <- function(national, thresholds, peaks) {
     dplyr::left_join(window, by = "season") |>
     dplyr::left_join(dplyr::select(peaks, season, oblig_peak_week, sent_peak_week), by = "season") |>
     dplyr::mutate(oblig_peak_in_window = oblig_peak_week >= onset_week & oblig_peak_week <= end_week)
+}
+
+# Season boundaries for the descriptive question RQ1 (variation of onset across seasons).
+# Leakage is irrelevant for a description, so every season gets a threshold:
+#   prospective MEM threshold where available (same as for WP 4.5), otherwise the
+#   retrospective MEM threshold from all pre-2020 seasons (2013/14-2017/18).
+# The prospective boundaries (boundaries_both_systems) remain the basis for the
+# in-season weeks of WP 4.5.
+descriptive_thresholds <- function(national, mem_th) {
+  retro <- mem_threshold_pre2020(national)
+  mem_th |>
+    dplyr::filter(!season %in% EDA_INCOMPLETE_SEASONS) |>
+    dplyr::transmute(
+      season,
+      threshold_source = ifelse(is.na(threshold_ili_per_100k), "MEM retrospective (all pre-2020 seasons)",
+                                "MEM prospective (earlier seasons only)"),
+      threshold_ili_per_100k = dplyr::coalesce(threshold_ili_per_100k, retro))
+}
+
+#' Onset, end and duration per period (seasons in summary statistics)
+onset_summary <- function(boundaries, national) {
+  sw <- dplyr::distinct(national, iso_week, season_week)
+  per <- dplyr::distinct(national, season, period, in_summary)
+  boundaries |>
+    dplyr::left_join(per, by = "season") |>
+    dplyr::filter(in_summary, !is.na(onset_week)) |>
+    dplyr::left_join(dplyr::rename(sw, onset_week = iso_week, onset_sw = season_week), by = "onset_week") |>
+    dplyr::left_join(dplyr::rename(sw, end_week = iso_week, end_sw = season_week), by = "end_week") |>
+    dplyr::group_by(period) |>
+    dplyr::summarise(seasons = dplyr::n(),
+                     onset_sw_mean = mean(onset_sw), onset_sw_sd = stats::sd(onset_sw),
+                     onset_sw_min = min(onset_sw), onset_sw_max = max(onset_sw),
+                     end_sw_mean = mean(end_sw),
+                     duration_mean = mean(duration_weeks), duration_min = min(duration_weeks),
+                     duration_max = max(duration_weeks), .groups = "drop")
 }
 
 # Weekly flag: in_season = week lies between MEM onset and end

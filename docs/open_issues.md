@@ -1,8 +1,16 @@
 # Open issues for the team (from WP 4.1)
 
-Decisions the team needs to take. Proposed solutions are suggestions from the data preparation, not yet agreed.
+Decisions the team needs to take. Proposed solutions are suggestions from the data preparation unless marked as decided.
 
-## 1. Season onset: no FOPH/BAG epidemic threshold after 2019/20  — affects 4.2, 4.5
+## Decision log
+
+| Date | Issue | Decision | Implemented in |
+|---|---|---|---|
+| 15.10.2026 | 1 – season onset/end | Moving Epidemic Method (MEM), threshold per season estimated only from earlier seasons | WP 4.2 (`R/eda.R`, `output/eda/season_boundaries.csv`, `in_season_weeks.csv`) |
+| 15.10.2026 | Post-2020 indicator | `post2020` = TRUE from season 2022/23; COVID-19 seasons 2020/21 and 2021/22 flagged separately (`covid_season`) | WP 4.1 (`R/prepare.R`) |
+| 15.10.2026 | 6 – missing Sentinella 2020-W11/W12 | Keep the weekly rows, leave Sentinella as `NA`, no interpolation in the main analysis. Models needing Sentinella exclude the affected observations; Oblig-only models may keep them. Check the impact on lagged predictors and rolling-origin validation. | WP 4.1 (data as delivered); WP 4.4 (models) |
+
+## 1. Season onset: no FOPH/BAG epidemic threshold after 2019/20  — **decided 15.10.2026: MEM** (see decision log)
 
 The study defines season onset as the first of two consecutive weeks in which the Sentinella ILI rate exceeds *the FOPH/BAG epidemic threshold of the respective season* (per 100,000 inhabitants; FOPH/BAG: average of the last ten seasons).
 
@@ -33,9 +41,11 @@ The raw files are a later download (10.10.2026, up to 2026-W40) than the one in 
 
 The study period ends in 2026-W37, so 2025/26 lacks the off-season weeks W38–W39. Kept as in the study.
 
-## 6. Missing Sentinella weeks 2020-W11/W12  — affects 4.4
+## 6. Missing Sentinella weeks 2020-W11/W12  — **decided 15.10.2026** (see decision log)
 
-Missing nationally and in all regions, so the regional fallback of Section 3 cannot fill them. Kept as `NA`. Decide in 4.4: linear interpolation for the lagged predictor, or drop the affected rows (all in training data).
+Missing nationally and in all regions, so the regional fallback of Section 3 cannot fill them. Decision: kept as `NA`, no interpolation in the main analysis.
+
+Note for WP 4.4: with lagged Sentinella predictors (lags up to 3 weeks) the predictors are also missing for the following weeks, up to about 2020-W15. All affected weeks lie in the training data, never in a test season. For the comparison of model (b) Oblig-only and model (c) Oblig + Sentinella (H2: "otherwise identical model", Diebold-Mariano test), both models should be fitted on the same observations, i.e. exclude the affected weeks in both.
 
 ## 7. Reporting delay  — affects 4.4
 

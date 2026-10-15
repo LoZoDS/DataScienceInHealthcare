@@ -9,9 +9,9 @@
 
 # Run: Rscript scripts/02_eda.R
 
-"Preliminary Study, Section 4.2: seasonal patterns, between-season differences,
-unusual observations; per season peak week, peak intensity and season onset/end
-(applied to both systems); regional variation described only"
+# Preliminary Study, Section 4.2: seasonal patterns, between-season differences,
+# unusual observations; per season peak week, peak intensity and season onset/end
+# (applied to both systems); regional variation described only
 
 source("R/setup.R")
 PATH_EDA <- file.path("output", "eda")
@@ -50,9 +50,10 @@ peaks    <- peaks_per_season(national)
 peak_sum <- peak_summary(peaks)
 readr::write_csv(peaks,    file.path(PATH_EDA, "peaks_per_season.csv"))
 readr::write_csv(peak_sum, file.path(PATH_EDA, "peak_summary.csv"))
-message(sprintf("Peaks: %d seasons; Sentinella peak earlier than oblig in %d, same week in %d, later in %d",
-                nrow(peaks), sum(peaks$peak_lag_weeks > 0), sum(peaks$peak_lag_weeks == 0),
-                sum(peaks$peak_lag_weeks < 0)))
+lc  <- lag_counts(peaks, "peak_lag_weeks")
+lci <- lag_counts(peaks, "peak_lag_inc_weeks")
+message(sprintf("Peaks: %d seasons; Sentinella earlier/same/later than oblig: %d/%d/%d (per 1,000 consultations), %d/%d/%d (per 100,000)",
+                nrow(peaks), lc[1], lc[2], lc[3], lci[1], lci[2], lci[3]))
 
 # 4. Season onset and end (MEM)
 # Threshold per season from earlier seasons only (Moving Epidemic Method), then the onset/end rule of Section 4.2; the Sentinella window is applied to oblig.
@@ -67,6 +68,13 @@ readr::write_csv(mem_th,     file.path(PATH_EDA, "mem_thresholds.csv"))
 readr::write_csv(validation, file.path(PATH_EDA, "mem_validation.csv"))
 readr::write_csv(boundaries, file.path(PATH_EDA, "season_boundaries.csv"))
 readr::write_csv(in_season,  file.path(PATH_EDA, "in_season_weeks.csv"))   # for WP 4.5
+# Descriptive boundaries for RQ1 (every season, retrospective MEM where no prospective one)
+desc_th    <- descriptive_thresholds(national, mem_th)
+desc_bound <- boundaries_both_systems(national, desc_th, peaks) |>
+  dplyr::left_join(dplyr::select(desc_th, season, threshold_source), by = "season")
+onset_sum  <- onset_summary(desc_bound, national)
+readr::write_csv(desc_bound, file.path(PATH_EDA, "season_boundaries_descriptive.csv"))  # RQ1
+readr::write_csv(onset_sum,  file.path(PATH_EDA, "onset_summary.csv"))
 message(sprintf("MEM: thresholds for %d seasons; retrospective pre-2020 threshold %.1f per 100,000",
                 sum(!is.na(mem_th$threshold_ili_per_100k)), validation$mem_retro_threshold[1]))
 
