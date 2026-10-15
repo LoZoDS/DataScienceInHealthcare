@@ -1,7 +1,7 @@
 WP 4.2 – Exploratory Analysis
 ================
 S. Ryf (responsible), L. Zovkic (feedback)
-14 October 2026
+17 October 2026
 
 - [1 Data](#1-data)
 - [2 Seasonal patterns](#2-seasonal-patterns)
