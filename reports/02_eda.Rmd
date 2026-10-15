@@ -2,7 +2,7 @@
 title: "WP 4.2 – Exploratory Analysis"
 subtitle: "From Surveillance to Prediction: Forecasting Weekly Influenza Activity in Switzerland"
 author: "S. Ryf (responsible), L. Zovkic (feedback)"
-date: "`r format(Sys.Date(), '%d %B %Y')`"
+date: "17 October 2026"
 output:
   github_document:
     toc: true
