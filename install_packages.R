@@ -5,7 +5,9 @@ pkgs <- c(
   # reports and tests
   "rmarkdown", "knitr", "testthat",
   # exploratory analysis (WP 4.2): Moving Epidemic Method for season onset/end
-  "mem"
+  "mem",
+  # lag analysis (WP 4.3)
+  "forecast"
   # forecasting (WP 4.4/4.5) will add e.g. "MASS", "forecast", "xgboost"
 )
 new <- pkgs[!pkgs %in% rownames(installed.packages())]
