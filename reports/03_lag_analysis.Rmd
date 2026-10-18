@@ -1,0 +1,610 @@
+---
+title: "WP 4.3 - Lag Analysis"
+subtitle: "From Surveilliance to Prediction: Forecasting Weekly Influenza Activity in Switzerland"
+author: "H. Wang (responsible), Q. Xu (feedback)"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  bookdown::github_document2:
+    toc: true
+    number_sections: true
+    fig_width: 9
+    fig_height: 5
+    dev: png
+    df_print: kable
+editor_options:
+  markdown:
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = normalizePath(".."))
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, dpi = 150,
+                      fig.path = "figures/03_")
+
+# Load packages
+install_file <- "../install_packages.R"
+
+recorded <- character()
+env <- new.env()
+env$install.packages <- function(p, ...) {
+  recorded <<- c(recorded, p)
+  missing <- setdiff(p, rownames(installed.packages()))
+  if (length(missing) > 0) utils::install.packages(missing, ...)
+}
+source(install_file, local = env)
+
+pd <- getParseData(parse(install_file, keep.source = TRUE))
+strings <- gsub("^[\"']|[\"']$", "", pd$text[pd$token == "STR_CONST"])
+
+pkgs <- unique(c(recorded, strings))
+pkgs <- intersect(pkgs, rownames(installed.packages()))
+invisible(lapply(pkgs, library, character.only = TRUE))
+```
+
+```{r layout_settings, include=FALSE}
+COL_OBLIG <- "#2a78d6"  # categorical slot 1
+COL_SENT  <- "#eb6834"  # categorical slot 2
+theme_set(theme_minimal(base_size = 11) +
+            theme(panel.grid.minor = element_blank(),
+                  panel.grid.major.x = element_blank(),
+                  plot.title.position = "plot",
+                  strip.text = element_text(face = "bold", hjust = 0)))
+```
+
+```{r load_data, include=FALSE}
+flu_w_nation = read_csv("data/processed/flu_weekly_national.csv")
+flu_w_s_long = read_csv("data/processed/flu_weekly_strata_long.csv")
+
+flu_w_nation <- flu_w_nation |>
+  arrange(week_start)
+
+# Check data: weeks with missing values in each system
+missing_senti <- flu_w_nation |>
+  filter(is.na(sentinella_ili_rate)) |>
+  select(iso_week, season)
+
+flu_w_nation |> filter(is.na(oblig_inc_100k)) |> select(iso_week, season)
+
+# Check how many weeks each system has
+data_check <- flu_w_nation |>
+  summarise(weeks         = n(),
+            oblig_present = sum(!is.na(oblig_inc_100k)),
+            senti_present = sum(!is.na(sentinella_ili_rate)),
+            senti_missing = sum(is.na(sentinella_ili_rate)))
+
+# Check data: lab-confirmed cases per unit of ILI, before vs after 2020
+ratio_tab <- flu_w_nation |>
+  filter(sentinella_ili_rate > 10, period != "covid") |>  # epidemic weeks, without the COVID seasons
+  group_by(period) |>
+  summarise(median_ratio = round(median(oblig_inc_100k / sentinella_ili_rate),
+                                 2),   
+            weeks = n()) |>
+  arrange(desc(period))   
+ratio_pre  <- ratio_tab$median_ratio[ratio_tab$period == "pre2020"]
+ratio_post <- ratio_tab$median_ratio[ratio_tab$period == "post2020"]
+```
+
+This analysis uses the national weekly series of laboratory-confirmed
+influenza incidence from mandatory reporting (cases per 100,000
+population) and influenza-like illness (ILI) consultations from the
+Sentinella system (ILI consultations per 1,000 consultations), both on
+their original scale. It covers all `r data_check$weeks` weeks from
+2013-W01 to 2026-W37, that is, the seasons 2013/14 to 2025/26 and the
+second half of season 2012/13, for which reporting in the dataset begins
+in January 2013. Sentinella is missing in
+`r data_check$senti_missing` weeks
+(`r paste(missing_senti$iso_week, collapse = " and ")`); these were kept
+as missing rather than imputed, so correlations use complete pairs of
+weeks only (n = `r data_check$senti_present`). Because testing
+behaviour changed after 2020 (in epidemic weeks, the median number of
+laboratory-confirmed cases per unit of ILI rose from `r ratio_pre` to
+`r ratio_post`), the analysis was repeated separately for the periods
+before and after 2020 (Section \@ref(sensitivity)).
+
+# Cross-Correlation {#corss-correlation}
+
+The cross-correlation measures how strongly the two series move together
+when one of them is shifted in time. For a shift (lead) of *k* weeks,
+Sentinella in week *t* is correlated with mandatory reporting in week
+*t* + *k*. A positive lead therefore means Sentinella comes first, and a
+negative lead means mandatory reporting comes first. Leads from −6 to +6
+weeks were examined. Pairs of weeks with a missing value were skipped.
+
+Under the null hypothesis that two white-noise series are unrelated, a
+cross-correlation is approximately normal with mean 0 and standard
+deviation 1/√*n*. Because hypothesis H1 concerns four leads (0, 1, 2 and
+3 weeks), a Bonferroni correction was applied, giving a significance
+band of ±2.50/√*n*.
+
+## Naive correlation (before pre-whitening) {#ccf-naive}
+
+```{r cross-corr}
+# Correlation between x and y for each shift ("lead")
+#   lead > 0: x in week t vs y in week t + lead   -> x leads y
+#   lead < 0: y in week t vs x in week t + |lead| -> y leads x
+#   use = "complete.obs": skip pairs with a missing value
+#         (series are NOT shortened)
+cross_cor <- function(x, y, leads = -6:6) {
+  n <- length(x)
+  r <- sapply(leads, function(k) {
+    if (k >= 0) cor(x[1:(n - k)], y[(1 + k):n], use = "complete.obs")
+    else        cor(y[1:(n + k)], x[(1 - k):n], use = "complete.obs")
+  })
+  tibble(lead = leads, r = r)
+}
+
+# Bar chart of cross-correlations, coloured by which system leads
+plot_ccf <- function(cc, band, title) {
+  cc |>
+    mutate(direction = case_when(lead > 0 ~ "Sentinella",   # Sentinella first
+                                 lead < 0 ~ "Oblig",        # mandatory reporting first
+                                 TRUE     ~ "Same week")) |>
+    ggplot(aes(lead, r, fill = direction)) +
+    geom_col(width = 0.6) +
+    geom_hline(yintercept = 0, colour = "grey40") +
+    geom_hline(yintercept = c(-band, band), linetype = "dashed", colour = "grey40") +
+    scale_fill_manual(values = c(Sentinella = COL_SENT, Oblig = COL_OBLIG,
+                                 "Same week" = "grey55")) +
+    scale_x_continuous(breaks = -6:6) +
+    labs(x = "Lead in weeks (positive = Sentinella leads mandatory reporting)",
+         y = "Cross-correlation", title = title,
+         caption = paste("Orange: Sentinella leads. Blue: mandatory reporting leads.",
+                         "Grey: same week. Dashed: significance band.")) +
+    theme(plot.caption = element_text(hjust = 1), legend.position = "none")
+}
+
+# Weeks with both systems present, and the Bonferroni-corrected band (4 leads)
+n_pairs <- sum(complete.cases(flu_w_nation$sentinella_ili_rate,
+                              flu_w_nation$oblig_inc_100k))
+band    <- qnorm(1 - 0.025 / 4) / sqrt(n_pairs)    # qnorm(0.99375) = 2.50
+
+# Naive cross-correlation of the original series
+cc_raw <- cross_cor(flu_w_nation$sentinella_ili_rate,
+                    flu_w_nation$oblig_inc_100k)
+
+fig_ccf_raw <- plot_ccf(cc_raw, band, "Cross-correlation before pre-whitening")
+fig_ccf_raw
+```
+
+The naive cross-correlation was computed on the original series, using
+the `r n_pairs` weeks in which both systems were reported (significance
+band ±`r sprintf("%.3f", band)`). All correlations lie far above the
+band, ranging from `r sprintf("%.2f", min(cc_raw$r))` to
+`r sprintf("%.2f", max(cc_raw$r))`, and they are high in both directions
+(`r sprintf("%.2f", cc_raw$r[cc_raw$lead == -1])` when mandatory
+reporting leads by one week,
+`r sprintf("%.2f", cc_raw$r[cc_raw$lead == 0])` in the same week and
+`r sprintf("%.2f", cc_raw$r[cc_raw$lead == 1])` when Sentinella leads by
+one week). This pattern is expected for two series that both rise every
+winter and fall every summer: shared seasonality and strong
+week-to-week persistence make the series correlated at almost any
+shift. The naive cross-correlation therefore cannot show which system
+moves first, and the series were pre-whitened before the timing was
+assessed.
+
+## Correlation after pre-whitening {#ccf-white}
+
+Pre-whitening removes from each series the part that is predictable
+from its own past, so that only the unexpected week-to-week movements
+remain. It was done in three steps. First, the average seasonal cycle
+was removed from both series by regressing each on three pairs of
+Fourier terms (sine and cosine waves with periods of one year, half a
+year and a third of a year) and keeping the residuals. Second, an ARIMA
+model was fitted to the deseasonalised Sentinella series, with the
+model order chosen by AIC (`auto.arima`); its residuals are the
+pre-whitened Sentinella series. Third, the same fitted ARIMA filter was
+applied, without re-estimation, to the deseasonalised mandatory
+reporting series. Applying one identical filter to both series removes
+their shared seasonality and persistence while preserving the timing
+relationship between them.
+
+```{r fig-pre-whitening-acf, fig.height = 6}
+x <- flu_w_nation$sentinella_ili_rate   # input: Sentinella (original values), contains 2 NA
+y <- flu_w_nation$oblig_inc_100k    # output: mandatory reporting (original values), complete
+
+# ---- 5a. Remove the seasonal cycle with Fourier terms ----
+fourier_terms <- fourier(ts(x, frequency = 365.25 / 7), K = 3)   # 6 sine/cosine columns
+
+# na.exclude: residuals for ALL weeks, NA kept in place -> series stays aligned
+x_deseason <- resid(lm(x ~ fourier_terms, na.action = na.exclude))
+y_deseason <- resid(lm(y ~ fourier_terms, na.action = na.exclude))
+
+# ---- 5b. ARIMA filter fitted on Sentinella ----
+arima_fit <- auto.arima(x_deseason, seasonal = FALSE)   # season already removed in 5a
+
+x_white <- as.numeric(resid(arima_fit))                 # Sentinella surprises
+
+# ---- 5c. The SAME filter on mandatory reporting ----
+y_white <- as.numeric(resid(Arima(y_deseason, model = arima_fit)))
+
+# ---- 5d. Checks ----
+# Ljung-Box test, H0 = no autocorrelation up to lag 10. Want p > 0.05
+lbtest = Box.test(x_white, lag = 10, type = "Ljung-Box")
+
+# ACF before vs after (na.pass: use all available pairs)
+acf_df <- function(v, label, max_lag = 60) {
+  a <- acf(v, lag.max = max_lag, plot = FALSE, na.action = na.pass)
+  tibble(lag = as.numeric(a$lag)[-1],      # drop lag 0 (always 1)
+         acf = as.numeric(a$acf)[-1],
+         stage = label)
+}
+
+acf_both <- bind_rows(acf_df(x,       "Before: Sentinella"),
+                      acf_df(x_white, "After: pre-whitened Sentinella")) |>
+  mutate(stage = factor(stage, levels = c("Before: Sentinella",
+                                          "After: pre-whitened Sentinella")))
+
+fig_acf <- ggplot(acf_both, aes(lag, acf)) +
+  geom_col(fill = COL_SENT, width = 0.7) +
+  geom_hline(yintercept = 0, colour = "grey40") +
+  geom_hline(yintercept = c(-1.96, 1.96) / sqrt(n_pairs),    # 95% band for white noise
+             linetype = "dashed", colour = "grey40") +
+  facet_wrap(~stage, ncol = 1) +
+  labs(x = "Lag (weeks)", y = "Autocorrelation",
+       title = "Autocorrelation of Sentinella before and after pre-whitening",
+       caption = "Dashed: 95% band for white noise. Source: FOPH/BAG.") +
+  theme(plot.caption = element_text(hjust = 1))
+
+fig_acf
+
+# Values used in the text and in Table 1
+arima_order <- paste0("ARIMA(", paste(arimaorder(arima_fit), collapse = ","), ")")
+acf_after   <- acf_both |> filter(stage == "After: pre-whitened Sentinella")
+acf_outside <- acf_after |> filter(abs(acf) > 1.96 / sqrt(n_pairs))
+n_white     <- sum(complete.cases(x_white, y_white))
+```
+
+```{r prewhitening-table}
+knitr::kable(
+  tibble(Check = c("ARIMA filter (chosen by AIC)",
+                   "Weeks with both pre-whitened series",
+                   "Ljung-Box statistic (lag 10)",
+                   "Ljung-Box p-value",
+                   "ACF lags outside the 95% band (lags 1 to 60)"),
+         Result = c(arima_order,
+                    as.character(n_white),
+                    sprintf("%.2f (df = %d)", lbtest$statistic, lbtest$parameter),
+                    sprintf("%.2f", lbtest$p.value),
+                    paste0(nrow(acf_outside), " (lags ",
+                           paste(acf_outside$lag, collapse = ", "), ")"))),
+  caption = "Pre-whitening filter and white-noise checks for the Sentinella series.")
+```
+
+The chosen filter was `r arima_order`. Before pre-whitening, the
+autocorrelation of Sentinella shows the yearly wave (high at short
+lags, negative around half a year and high again around one year).
+After pre-whitening, almost all autocorrelations lie within the 95%
+band, and the Ljung-Box test found no remaining autocorrelation up to
+lag 10 (p = `r sprintf("%.2f", lbtest$p.value)`). The only remaining
+values outside the band are at lags
+`r paste(acf_outside$lag, collapse = " and ")`, a small trace of the
+yearly pattern that arises because seasons differ in size; it does not
+affect the short leads examined here. The pre-whitened series can
+therefore be treated as approximately white noise, so the significance
+band of the cross-correlation is valid.
+
+```{r fig-pre-whitening}
+cc_white <- cross_cor(x_white, y_white)
+
+fig_ccf_white <- plot_ccf(cc_white, band, "Cross-correlation after pre-whitening")
+fig_ccf_white
+```
+
+```{r ccf-table}
+# Naive and pre-whitened cross-correlations side by side
+ccf_tab <- cc_raw |>
+  rename(r_naive = r) |>
+  left_join(cc_white |> rename(r_white = r), by = "lead") |>
+  mutate(direction = case_when(lead > 0 ~ "Sentinella leads",
+                               lead < 0 ~ "Mandatory reporting leads",
+                               TRUE     ~ "Same week"),
+         outside = ifelse(abs(r_white) > band, "Yes", "No"))
+
+knitr::kable(ccf_tab |> select(lead, direction, r_naive, r_white, outside),
+             digits = 2,
+             col.names = c("Lead (weeks)", "Direction", "Naive r",
+                           "Pre-whitened r", "Outside band"),
+             caption = paste0("Cross-correlation between Sentinella and mandatory reporting, ",
+                              "before and after pre-whitening (n = ", n_pairs,
+                              " weeks; significance band ±", sprintf("%.3f", band), ")."))
+```
+
+After pre-whitening, the cross-correlations fall sharply and form a
+clear peak (Table \@ref(tab:ccf-table)). The strongest correlation is in the same week
+(r = `r sprintf("%.2f", cc_white$r[cc_white$lead == 0])`), followed by
+the one-week shifts in both directions
+(`r sprintf("%.2f", cc_white$r[cc_white$lead == -1])` when mandatory
+reporting leads and `r sprintf("%.2f", cc_white$r[cc_white$lead == 1])`
+when Sentinella leads). Beyond one week the correlations are close to
+zero; the few that cross the band are small and negative and most
+likely reflect the filter over-correcting after very large peak weeks
+rather than a real negative relationship.
+
+# Lag Analysis {#lag-analysis}
+
+The lag analysis uses the pre-whitened cross-correlations to answer
+two questions. First, hypothesis H1: is Sentinella associated with
+mandatory reporting at a lead of 0 to 3 weeks? Second, at which lead is
+the association strongest, and does it point to Sentinella moving
+earlier?
+
+For each lead, the test statistic is *z* = *r*·√*n*, where *n* is the
+number of complete pairs at that lead; under the null hypothesis of no
+association it follows a standard normal distribution. Two-sided
+p-values were Bonferroni-adjusted for the four leads in H1 (0 to 3
+weeks). Confidence intervals were computed with the Fisher
+*z*-transformation at the same Bonferroni-adjusted level (98.75% per
+lead, 95% family-wise).
+
+```{r lag-stats}
+# Test statistics for each lead of the pre-whitened cross-correlation
+#   n:     complete pairs at that lead (shifting removes up to k weeks)
+#   p:     two-sided p-value, z = r * sqrt(n) ~ N(0, 1) under H0
+#   CI:    Fisher z interval at the Bonferroni-adjusted level (4 leads)
+z_bonf <- qnorm(1 - 0.025 / 4)
+
+ccf_stats <- function(x, y, leads = -3:3) {
+  n_all <- length(x)
+  bind_rows(lapply(leads, function(k) {
+    if (k >= 0) { a <- x[1:(n_all - k)]; b <- y[(1 + k):n_all] }
+    else        { a <- y[1:(n_all + k)]; b <- x[(1 - k):n_all] }
+    ok <- complete.cases(a, b)
+    r  <- cor(a[ok], b[ok])
+    n  <- sum(ok)
+    tibble(lead = k, n = n, r = r,
+           ci_low  = tanh(atanh(r) - z_bonf / sqrt(n - 3)),
+           ci_high = tanh(atanh(r) + z_bonf / sqrt(n - 3)),
+           p       = 2 * (1 - pnorm(abs(r) * sqrt(n))))
+  }))
+}
+
+lag_stats <- ccf_stats(x_white, y_white, leads = -3:3) |>
+  mutate(direction = case_when(lead > 0 ~ "Sentinella leads",
+                               lead < 0 ~ "Mandatory reporting leads",
+                               TRUE     ~ "Same week"))
+
+# H1 table: leads 0 to 3, Bonferroni-adjusted p-values
+h1_tab <- lag_stats |>
+  filter(lead %in% 0:3) |>
+  mutate(p_bonf = pmin(1, 4 * p),
+         significant = ifelse(p_bonf < 0.05, "Yes", "No"))
+
+# Lead with the strongest correlation
+peak_lead <- lag_stats$lead[which.max(lag_stats$r)]
+```
+
+## Test of hypothesis H1 (leads 0 to 3 weeks) {#h1-test}
+
+```{r h1-table}
+fmt_p <- function(p) ifelse(p < 0.001, "<0.001", sprintf("%.3f", p))
+
+knitr::kable(h1_tab |>
+               transmute(lead, n,
+                         r = sprintf("%.2f", r),
+                         ci = sprintf("%.2f to %.2f", ci_low, ci_high),
+                         p = fmt_p(p),
+                         p_bonf = fmt_p(p_bonf),
+                         significant),
+             col.names = c("Lead (weeks)", "n", "r", "CI (Bonferroni-adjusted)",
+                           "p", "p (Bonferroni)", "Significant"),
+             caption = "Test of H1: pre-whitened cross-correlation at leads of 0 to 3 weeks (positive lead = Sentinella first).")
+```
+
+Sentinella was significantly associated with mandatory reporting in the
+same week (r = `r sprintf("%.2f", h1_tab$r[h1_tab$lead == 0])`,
+Bonferroni-adjusted p `r ifelse(h1_tab$p_bonf[h1_tab$lead == 0] < 0.001, "< 0.001", paste("=", sprintf("%.3f", h1_tab$p_bonf[h1_tab$lead == 0])))`)
+and at a lead of one week
+(r = `r sprintf("%.2f", h1_tab$r[h1_tab$lead == 1])`,
+Bonferroni-adjusted p `r ifelse(h1_tab$p_bonf[h1_tab$lead == 1] < 0.001, "< 0.001", paste("=", sprintf("%.3f", h1_tab$p_bonf[h1_tab$lead == 1])))`).
+At a lead of two weeks the correlation was small and negative
+(r = `r sprintf("%.2f", h1_tab$r[h1_tab$lead == 2])`,
+Bonferroni-adjusted p = `r fmt_p(h1_tab$p_bonf[h1_tab$lead == 2])`).
+Although it crosses the significance threshold, it points in the
+opposite direction to H1, which expects a positive association, and is
+most likely a side effect of the pre-whitening filter (Section \@ref(ccf-white)).
+At three weeks there was no association
+(r = `r sprintf("%.2f", h1_tab$r[h1_tab$lead == 3])`,
+p = `r fmt_p(h1_tab$p_bonf[h1_tab$lead == 3])`). H1 is therefore
+supported for leads of 0 and 1 week, but not for 2 or 3 weeks.
+
+## Direction and size of the lag {#lag-direction}
+
+```{r fig-lag-profile}
+fig_lag <- ggplot(lag_stats, aes(lead, r, colour = direction)) +
+  geom_hline(yintercept = 0, colour = "grey40") +
+  geom_errorbar(aes(ymin = ci_low, ymax = ci_high), width = 0.15, linewidth = 0.7) +
+  geom_point(size = 3) +
+  geom_text(aes(label = sprintf("%.2f", ifelse(abs(r) < 0.005, 0, r))), nudge_x = 0.28, size = 3.2,
+            colour = "grey20") +
+  scale_colour_manual(values = c("Sentinella leads"          = COL_SENT,
+                                 "Mandatory reporting leads" = COL_OBLIG,
+                                 "Same week"                 = "grey45")) +
+  scale_x_continuous(breaks = -3:3) +
+  labs(x = "Lead in weeks (positive = Sentinella leads mandatory reporting)",
+       y = "Cross-correlation after pre-whitening",
+       title = "Lead-lag profile: the association peaks in the same week",
+       caption = paste("Points: pre-whitened cross-correlation. Bars: Bonferroni-adjusted confidence intervals.",
+                       "\nOrange: Sentinella leads. Blue: mandatory reporting leads. Grey: same week. Source: FOPH/BAG.")) +
+  theme(legend.position = "none", plot.caption = element_text(hjust = 1))
+
+fig_lag
+```
+
+```{r direction-table}
+# Compare each Sentinella lead with the same-sized lead in the other direction
+dir_tab <- tibble(k = 1:3) |>
+  mutate(r_senti = sapply(k, function(i) lag_stats$r[lag_stats$lead ==  i]),
+         r_oblig = sapply(k, function(i) lag_stats$r[lag_stats$lead == -i]),
+         diff    = r_senti - r_oblig)
+
+knitr::kable(dir_tab, digits = 2,
+             col.names = c("Shift (weeks)", "r, Sentinella leads",
+                           "r, mandatory reporting leads",
+                           "Difference (Sentinella minus mandatory)"),
+             caption = "Comparison of the two directions at the same shift.")
+```
+
+The lead-lag profile peaks at a lead of `r peak_lead` weeks, that is,
+in the same week. If Sentinella detected changes in influenza activity
+earlier, the profile would peak at a positive lead, or at least the
+correlation at +1 week would clearly exceed the correlation at −1 week.
+The opposite is observed: at a one-week shift the correlation is
+`r sprintf("%.2f", dir_tab$r_oblig[1])` when mandatory reporting leads
+and `r sprintf("%.2f", dir_tab$r_senti[1])` when Sentinella leads
+(Table \@ref(tab:direction-table)). At shifts of two and three weeks, the correlations in both
+directions are small (between
+`r sprintf("%.2f", min(dir_tab$r_senti[2:3], dir_tab$r_oblig[2:3]))` and
+`r sprintf("%.2f", max(dir_tab$r_senti[2:3], dir_tab$r_oblig[2:3]))`)
+and do not show a consistent direction. The significant one-week correlations in both directions are
+best explained by unexpected rises in influenza activity that last
+somewhat longer than one week, so they are seen in neighbouring weeks
+of both systems.
+
+In summary, the two surveillance systems are clearly associated but
+move synchronously: there is no evidence that Sentinella provides an
+earlier signal than mandatory reporting. Formally, H1 is supported at
+leads of 0 and 1 week. For the forecasting models in WP 4.4, Sentinella
+is therefore included at a lag of 0 or 1 week; whether it improves
+forecasts depends on whether its weekly values become available before
+complete mandatory reporting data, not on an epidemiological lead.
+
+# Sensitivity Analysis: pre- and post-2020 (COVID) {#sensitivity}
+
+Testing behaviour changed considerably after 2020, so the
+pre-whitening and cross-correlation were repeated separately for the
+seasons 2013/14 to 2019/20 and 2022/23 to 2025/26, with the COVID-19
+seasons excluded from both. Each subset was pre-whitened from scratch,
+because the seasonal shape and the ARIMA filter can differ between
+periods, and the significance band was recomputed for the number of
+weeks in each subset.
+
+```{r sensitivity, fig.height = 7}
+prewhiten_ccf <- function(d, label, K = 3, scale = c("original", "log")) {
+  scale <- match.arg(scale)
+  x <- if (scale == "log") log1p(d$sentinella_ili_rate) else d$sentinella_ili_rate              # choose the scale
+  y <- if (scale == "log") log1p(d$oblig_inc_100k)  else d$oblig_inc_100k
+  ft <- fourier(ts(x, frequency = 365.25 / 7), K = K)           # 5a: seasonal waves
+  xd <- resid(lm(x ~ ft, na.action = na.exclude))               # 5a: NA positions kept
+  yd <- resid(lm(y ~ ft, na.action = na.exclude))
+  fit <- auto.arima(xd, seasonal = FALSE)                       # 5b: filter on Sentinella
+  xw <- as.numeric(resid(fit))                                  # 5b: Sentinella surprises
+  yw <- as.numeric(resid(Arima(yd, model = fit)))               # 5c: same filter
+  n_p <- sum(complete.cases(xw, yw))                            # weeks with both present
+  cross_cor(xw, yw, leads = -3:3) |>                            # 6: cross-correlation
+    mutate(subset = label, scale = scale, n = n_p,
+           band = qnorm(1 - 0.025 / 4) / sqrt(n_p))             # band for this subset
+}
+
+sens <- bind_rows(
+  prewhiten_ccf(flu_w_nation,                                            "All seasons"),
+  prewhiten_ccf(filter(flu_w_nation, period == "pre2020"),               "Pre-2020"),
+  prewhiten_ccf(filter(flu_w_nation, period == "post2020"),              "Post-2020"),
+  #prewhiten_ccf(filter(flu_w_nation, week_start < as.Date("2023-10-02")), "Training only"),
+  #prewhiten_ccf(flu_w_nation, "All seasons", scale = "log")             # scale check
+)
+
+
+# Cross-correlation figure per subset
+sens_plot <- sens |>
+  mutate(
+    # panel title: subset, scale and number of weeks used
+    panel = paste0(subset, " (n = ", n, ")"),
+    panel = factor(panel, levels = unique(panel)),       # keep the order of the sens table
+    # which system leads at this shift (same colours as Steps 4 and 6)
+    direction = case_when(lead > 0 ~ "Sentinella",
+                          lead < 0 ~ "Oblig",
+                          TRUE     ~ "Same week"),
+    # is the bar outside this subset's own band? (used to fade non-significant bars)
+    outside = abs(r) > band)
+
+fig_sens <- ggplot(sens_plot, aes(lead, r, fill = direction)) +
+  geom_col(aes(alpha = outside), width = 0.6) +
+  geom_hline(yintercept = 0, colour = "grey40") +
+  # each subset's own band: band is a column in the data, so each panel gets its own lines
+  geom_hline(aes(yintercept =  band), linetype = "dashed", colour = "grey40") +
+  geom_hline(aes(yintercept = -band), linetype = "dashed", colour = "grey40") +
+  # value labels above positive bars, below negative bars (tiny values shown as 0.00)
+  geom_text(aes(label = sprintf("%.2f", ifelse(abs(r) < 0.005, 0, r)),
+                vjust = ifelse(r >= 0, -0.4, 1.3)),
+            size = 2.8, colour = "grey20") +
+  facet_wrap(~panel, ncol = 1) +                         # one panel per subset, stacked
+  scale_fill_manual(values = c(Sentinella = COL_SENT, Oblig = COL_OBLIG,
+                               "Same week" = "grey55")) +
+  scale_alpha_manual(values = c(`TRUE` = 1, `FALSE` = 0.35)) +   # faded = inside the band
+  scale_x_continuous(breaks = -3:3) +
+  scale_y_continuous(limits = c(-0.25, 0.7), breaks = c(0, 0.25, 0.5)) +  # same scale in every panel
+  labs(x = "Lead in weeks (positive = Sentinella leads mandatory reporting)",
+       y = "Cross-correlation after pre-whitening",
+       title = "Sensitivity analysis: pre-whitened cross-correlation by subset",
+       caption = paste("Orange: Sentinella leads. Blue: mandatory reporting leads. Grey: same week.",
+                       "\nFaded bars lie inside the dashed band (Bonferroni-corrected,",
+                       "recomputed for each subset). Source: FOPH/BAG.")) +
+  theme(plot.caption = element_text(hjust = 1),
+        legend.position = "none",
+        panel.spacing.y = unit(0.8, "lines"))
+
+fig_sens
+```
+
+```{r sensitivity-table}
+sens_wide <- sens |>
+  mutate(r = sprintf("%.2f", ifelse(abs(r) < 0.005, 0, r)),   # avoid "-0.00"
+         band = sprintf("%.3f", band)) |>
+  select(subset, n, band, lead, r) |>
+  pivot_wider(names_from = lead, values_from = r)
+
+knitr::kable(sens_wide,
+             col.names = c("Subset", "n", "Band", paste0("Lead ", -3:3)),
+             caption = "Pre-whitened cross-correlation by subset (positive lead = Sentinella first).")
+
+# Values used in the text
+r0_sens  <- sens |> filter(lead == 0)
+rm1_sens <- sens |> filter(lead == -1)
+rp1_sens <- sens |> filter(lead ==  1)
+peak_all <- sens |> group_by(subset) |> slice_max(r, n = 1) |> pull(lead)
+```
+
+```{r sensitivity-fig2, fig.height = 3.5}
+fig_sens_summary <- sens |>
+  filter(lead %in% c(-1, 0, 1)) |>                       # the three key shifts
+  mutate(
+    subset_lab = subset,
+    subset_lab = factor(subset_lab, levels = rev(unique(subset_lab))),   # first subset on top
+    lead_lab = factor(lead, levels = c(-1, 0, 1),
+                      labels = c("Mandatory reporting leads by 1 week",
+                                 "Same week",
+                                 "Sentinella leads by 1 week"))) |>
+  ggplot(aes(r, subset_lab)) +
+  geom_segment(aes(x = 0, xend = r, yend = subset_lab), colour = "grey80") +  # line from 0
+  geom_point(aes(colour = lead_lab), size = 3) +                               # the value
+  geom_text(aes(label = sprintf("%.2f", r)), hjust = -0.4, size = 3, colour = "grey20") +
+  facet_wrap(~lead_lab, nrow = 1) +                      # one column per shift
+  scale_colour_manual(values = c("Mandatory reporting leads by 1 week" = COL_OBLIG,
+                                 "Same week"                           = "grey45",
+                                 "Sentinella leads by 1 week"          = COL_SENT)) +
+  scale_x_continuous(limits = c(0, 0.72), breaks = c(0, 0.25, 0.5)) +
+  labs(x = "Cross-correlation after pre-whitening", y = NULL,
+       title = "Lead 0 is the strongest in every subset",
+       caption = "Source: FOPH/BAG.") +
+  theme(legend.position = "none",
+        plot.caption = element_text(hjust = 1),
+        panel.grid.major.x = element_line(colour = "grey92"),   # vertical lines help read values
+        panel.grid.major.y = element_blank())
+
+fig_sens_summary
+```
+
+The pattern was the same in both periods (Table \@ref(tab:sensitivity-table)). The strongest
+correlation was in the same week in every subset
+(`r paste0(r0_sens$subset, ": ", sprintf("%.2f", r0_sens$r), collapse = "; ")`),
+and the correlation when mandatory reporting leads by one week was in
+every subset at least as large as when Sentinella leads by one week.
+Correlations were somewhat higher after 2020
+(`r sprintf("%.2f", r0_sens$r[r0_sens$subset == "Post-2020"])` in the
+same week, against
+`r sprintf("%.2f", r0_sens$r[r0_sens$subset == "Pre-2020"])` before
+2020), which is consistent with the larger post-2020 peaks, but the
+timing of the association did not change. The change in testing
+behaviour therefore altered the level of the relationship between the
+two systems but not its timing, and the conclusion of Section \@ref(lag-analysis) holds
+in both periods.
