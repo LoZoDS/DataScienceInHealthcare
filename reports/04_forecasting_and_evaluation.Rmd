@@ -1367,5 +1367,3 @@ ggplot2::ggsave(
 Overall, Model 5 provided the most accurate forecasts among the five evaluated models. Its performance across the three test seasons and its ability to capture the observed temporal patterns make it the preferred model for forecasting weekly influenza incidence in this analysis.
 
 The results suggest that a flexible model combining lagged surveillance indicators with seasonal information can provide useful predictive performance. However, the evaluation covers only three test seasons, so the model's performance should be reassessed as additional surveillance data become available.
-
-
