@@ -18,21 +18,25 @@ knitr::opts_chunk$set(echo = FALSE,  message = FALSE,  warning = FALSE,  dpi = 1
                         fig.path = "figures/04_")
 ```
 
-**Objective:**
+**Objective**
 
-Forecast next-week influenza incidence and assess whether Sentinella improves prediction beyond mandatory reporting (Oblig).
+Forecast next-week influenza incidence in Switzerland and assess whether Sentinella surveillance information improves predictive performance beyond mandatory reporting (Oblig), while comparing statistical and machine-learning forecasting approaches.
 
-**Evaluation strategy：**
+**Evaluation strategy**
 
 - Expanding-window, rolling-origin evaluation across three test seasons (2023/24–2025/26).\
+- Metrics: mean absolute error (MAE) and root mean squared error (RMSE), evaluated across all forecast weeks and during in-season weeks.\
+- MAE skill score relative to the naive baseline:
 
-- Metrics: MAE and RMSE, overall and during influenza weeks.\
+  \[
+  \text{MAE skill}=1-\frac{\text{MAE}_{\text{model}}}{\text{MAE}_{\text{naive}}}
+  \]
 
-- MAE skill score:\
+  Positive values indicate lower MAE than the naive baseline, zero indicates equal MAE, and negative values indicate higher MAE.
 
-  $$\text{MAE skill}=1-\frac{\text{MAE}_{\text{model}}}{\text{MAE}_{\text{naive}}}$$ Positive values indicate lower MAE than the naive baseline, a value of zero indicates equal performance, and negative values indicate higher MAE than the naive baseline.
+**Key comparison**
 
-**Key comparison:** M3 vs. M4 isolates the incremental predictive value of Sentinella.
+Model 3 (NB Oblig-only) versus Model 4 (NB Oblig + Sentinella) assesses the incremental predictive value of Sentinella information under the specified model-selection procedure. Models 6a and 6b provide sensitivity analyses by adding COVID-season and post-2020 indicators, respectively.
 
 # 1 Load data
 
@@ -51,59 +55,81 @@ The in-season classification identifies the weeks considered part of the influen
 
 # 2 Build the forecasting dataset
 
-Purpose : Define the forecast origin, next-week target, lagged predictors, target-week seasonality, and predictor sets for all forecasting models.
+Purpose: Prepare the dataset for one-week-ahead forecasting by defining the forecast origin and next-week target, constructing lagged predictors, aligning target-week indicators, and identifying candidate predictors for model selection.
 
-```{r forecasting dataset}
-# Step 1: Create one-week-ahead targets and lagged predictors
+| Component | Candidate rules for the formal model | Rationale |
+|:-----------------------|:-----------------------|:-----------------------|
+| Oblig AR terms | Consecutive lag combinations: 1; 1–2; 1–3; 1–4 weeks | Consistent with the original protocol's requirement for multiple autoregressive terms |
+| Fourier terms | $K = 1, 2, 3$, i.e., considering 1, 2, or 3 pairs of annual sine/cosine terms | Consistent with the original protocol's requirements for seasonality modelling and within-window selection |
+| Sentinella lag | The same-week observation at the forecast-origin week is the preferred candidate; the previous week's observation is a conservative candidate | In WP 4.3, the same-week association was strongest, but the evidence that Sentinella leads Oblig was insufficient |
+| Earlier Sentinella lags | Not included as default candidates in the main models | WP 4.3 showed no stable evidence of a 2–3 week lead |
+| Parameter selection | Selected separately within each expanding training window | Avoids using the test seasons to select the model |
+
+```{r forecasting_dataset}
+# Step 1: Create one-week-ahead targets and candidate predictors
+#
+# Time-index convention:
+#   origin = forecast-origin week t
+#   prev1  = week t-1
+#   prev2  = week t-2, etc.
+#   target = week t+1
+#
+# Important:
+# Predictors from the origin week may only be used if they are
+# assumed to be available at the forecast origin.
 
 forecast_data <- national |>
   dplyr::arrange(week_start) |>
   dplyr::mutate(
     # Forecast origin and target week
     origin_week = iso_week,
+    origin_week_start = week_start,
     target_week = dplyr::lead(iso_week),
     target_week_start = dplyr::lead(week_start),
 
-    # Target variables: next week
+    # One-week-ahead target variables
     target_oblig_inc_100k = dplyr::lead(oblig_inc_100k),
     target_oblig_cases = dplyr::lead(oblig_cases),
     target_population = dplyr::lead(population),
 
-    # Predictors relative to the target week:
-    # lag 1 = the forecast-origin week (week t)
-    # lag 2 = week t-1, etc.
-    oblig_lag1 = oblig_inc_100k,
-    oblig_lag2 = dplyr::lag(oblig_inc_100k, 1),
-    oblig_lag3 = dplyr::lag(oblig_inc_100k, 2),
-    oblig_lag4 = dplyr::lag(oblig_inc_100k, 3),
+    # Oblig incidence candidates:
+    # origin week and up to three preceding weeks
+    oblig_origin = oblig_inc_100k,
+    oblig_prev1 = dplyr::lag(oblig_inc_100k, 1),
+    oblig_prev2 = dplyr::lag(oblig_inc_100k, 2),
+    oblig_prev3 = dplyr::lag(oblig_inc_100k, 3),
 
-    oblig_cases_lag1 = oblig_cases,
-    oblig_cases_lag2 = dplyr::lag(oblig_cases, 1),
-    oblig_cases_lag3 = dplyr::lag(oblig_cases, 2),
-    oblig_cases_lag4 = dplyr::lag(oblig_cases, 3),
+    # Log-transformed Oblig incidence candidates
+    oblig_log_origin = log1p(oblig_origin),
+    oblig_log_prev1 = log1p(oblig_prev1),
+    oblig_log_prev2 = log1p(oblig_prev2),
+    oblig_log_prev3 = log1p(oblig_prev3),
 
-    sentinella_lag1 = sentinella_ili_rate,
-    sentinella_lag2 = dplyr::lag(sentinella_ili_rate, 1),
-    sentinella_lag3 = dplyr::lag(sentinella_ili_rate, 2),
-    sentinella_lag4 = dplyr::lag(sentinella_ili_rate, 3),
+    # Sentinella candidates:
+    # same week as forecast origin and preceding weeks
+    sent_origin = sentinella_ili_rate,
+    sent_prev1 = dplyr::lag(sentinella_ili_rate, 1),
+    sent_prev2 = dplyr::lag(sentinella_ili_rate, 2),
+    sent_prev3 = dplyr::lag(sentinella_ili_rate, 3),
 
-    # Log-transformed lagged incidence
-    oblig_log_lag1 = log1p(oblig_inc_100k),
-    oblig_log_lag2 = log1p(dplyr::lag(oblig_inc_100k, 1)),
-    oblig_log_lag3 = log1p(dplyr::lag(oblig_inc_100k, 2)),
-    oblig_log_lag4 = log1p(dplyr::lag(oblig_inc_100k, 3)),
+    # Log-transformed Sentinella candidates
+    sent_log_origin = log1p(sent_origin),
+    sent_log_prev1 = log1p(sent_prev1),
+    sent_log_prev2 = log1p(sent_prev2),
+    sent_log_prev3 = log1p(sent_prev3),
 
-    sent_log_lag1 = log1p(sentinella_ili_rate),
-    sent_log_lag2 = log1p(dplyr::lag(sentinella_ili_rate, 1)),
-    sent_log_lag3 = log1p(dplyr::lag(sentinella_ili_rate, 2)),
-    sent_log_lag4 = log1p(dplyr::lag(sentinella_ili_rate, 3)),
-
-    # Seasonality of the target week
+    # Fourier terms for the target week
+    # K = 1, 2, or 3 can be considered during training-window selection
     target_season_week = dplyr::lead(season_week),
+
     sin1 = sin(2 * pi * target_season_week / 52),
     cos1 = cos(2 * pi * target_season_week / 52),
+
     sin2 = sin(4 * pi * target_season_week / 52),
-    cos2 = cos(4 * pi * target_season_week / 52)
+    cos2 = cos(4 * pi * target_season_week / 52),
+
+    sin3 = sin(6 * pi * target_season_week / 52),
+    cos3 = cos(6 * pi * target_season_week / 52)
   )
 
 # Step 2: Attach the season classification of the target week
@@ -111,87 +137,203 @@ forecast_data <- national |>
 forecast_data <- forecast_data |>
   dplyr::left_join(
     in_season |>
-      dplyr::select(iso_week,season,test_season,in_season) |>
-      dplyr::rename(target_week = iso_week,target_season = season,
-        target_test_season = test_season,target_in_season = in_season),
-    by = "target_week")
+      dplyr::select(
+        iso_week, season, test_season, in_season
+      ) |>
+      dplyr::rename(
+        target_week = iso_week,
+        target_season = season,
+        target_test_season = test_season,
+        target_in_season = in_season
+      ),
+    by = "target_week"
+  )
 
+# Step 3: Define candidate predictor sets for formal model selection
 
-# Step 3: Define the predictors actually used by Models 3–5
-
-# Model 3: Simplified NB GLM, Oblig-only
-model3_predictors <- c("oblig_log_lag1")
-
-# Model 4: Simplified NB GLM, Oblig + Sentinella
-model4_predictors <- c(
-  "oblig_log_lag1",
-  "sent_log_lag1"
+# Oblig autoregressive candidates:
+# choose a contiguous lag structure within each training window.
+# The origin-week value corresponds to lag 1 relative to target week t+1.
+oblig_ar_candidates <- list(
+  AR1 = c("oblig_log_origin"),
+  AR2 = c("oblig_log_origin", "oblig_log_prev1"),
+  AR3 = c(
+    "oblig_log_origin",
+    "oblig_log_prev1",
+    "oblig_log_prev2"
+  ),
+  AR4 = c(
+    "oblig_log_origin",
+    "oblig_log_prev1",
+    "oblig_log_prev2",
+    "oblig_log_prev3"
+  )
 )
 
-# Model 5: Gradient Boosting, Oblig + Sentinella + seasonality
-model5_predictors <- c(
-  "oblig_log_lag1",
-  "sent_log_lag1",
-  "sent_log_lag2",
-  "sent_log_lag3",
-  "sent_log_lag4",
-  "sin1", "cos1", "sin2", "cos2"
+# Fourier candidates: K = 1, 2, or 3
+fourier_candidates <- list(
+  K1 = c("sin1", "cos1"),
+  K2 = c("sin1", "cos1", "sin2", "cos2"),
+  K3 = c("sin1", "cos1", "sin2", "cos2", "sin3", "cos3")
 )
 
-# Union of predictors used by the three fitted models
-all_model_predictors <- unique(c(
-  model3_predictors,
-  model4_predictors,
-  model5_predictors
+# Sentinella candidates motivated by WP 4.3:
+# origin week is the primary candidate only if available at origin;
+# previous week is the conservative alternative.
+sentinella_candidates <- list(
+  origin = "sent_log_origin",
+  previous_week = "sent_log_prev1"
+)
+
+# These objects define candidate sets only.
+# Selection must be performed separately inside each training window.
+
+# Step 4: Check missingness among the candidate predictors
+
+all_candidate_predictors <- unique(c(
+  unlist(oblig_ar_candidates, use.names = FALSE),
+  unlist(fourier_candidates, use.names = FALSE),
+  unlist(sentinella_candidates, use.names = FALSE)
 ))
-
-# Check missingness among predictors used by any fitted model
-forecast_data |>
-  dplyr::summarise(
-    missing_model_predictors = sum(
-      !stats::complete.cases(
-        dplyr::pick(dplyr::all_of(all_model_predictors))
-      )
-    )
-  ) |>
-  print()
-
-
-# Step 4: Check the forecasting dataset
-cat("Number of rows:", nrow(forecast_data), "\n")
 
 forecast_data |>
   dplyr::summarise(
     missing_target_incidence = sum(is.na(target_oblig_inc_100k)),
     missing_target_cases = sum(is.na(target_oblig_cases)),
     missing_target_population = sum(is.na(target_population)),
-    missing_oblig_lag1 = sum(is.na(oblig_lag1)),
-    missing_sentinella_lag1 = sum(is.na(sentinella_lag1)),
-    missing_model_predictors = sum(
+    missing_candidate_predictors = sum(
       !stats::complete.cases(
-        dplyr::pick(dplyr::all_of(all_model_predictors))))) |>print()
+        dplyr::pick(dplyr::all_of(all_candidate_predictors))
+      )
+    )
+  ) |>
+  print()
 
-# Check test-season weeks and their in-season classification
-forecast_data |> dplyr::filter(target_test_season %in% TRUE) |>
-  dplyr::count(target_season, target_in_season) |> print()
+# Step 5: Check test-season weeks and their in-season classification
+
+cat("Number of rows:", nrow(forecast_data), "\n")
+
+forecast_data |>
+  dplyr::filter(target_test_season %in% TRUE) |>
+  dplyr::count(target_season, target_in_season) |>
+  print()
 ```
+
+The forecasting dataset contains `r nrow(forecast_data)` weekly observations. One observation lacks the target incidence, target case count, and target population, while seven observations have missing candidate predictors. Missing values are not imputed; observations are excluded from model fitting or evaluation when the required variables are unavailable.
+
+Across the three test seasons, the number of in-season evaluation weeks ranged from (2025/26 )10 to (2023/24)14 per season.
+
+**Target-week indicators and COVID-related data validation**
+
+```{r target_week_indicators_validation_&_COVID-related_data_validation}
+# =============================================================================
+# Align COVID and post-2020 indicators with the target week
+# =============================================================================
+
+target_indicators <- national |>
+  dplyr::select(
+    iso_week,
+    covid_season,
+    post2020
+  ) |>
+  dplyr::rename(
+    target_week = iso_week,
+    target_covid_season = covid_season,
+    target_post2020 = post2020
+  )
+
+# Avoid joining the indicators twice if this block is re-run
+forecast_data <- forecast_data |>
+  dplyr::select(
+    -dplyr::any_of(c(
+      "target_covid_season",
+      "target_post2020"
+    ))
+  ) |>
+  dplyr::left_join(
+    target_indicators,
+    by = "target_week"
+  )
+
+# Check indicator coverage and values
+forecast_data |>
+  dplyr::summarise(
+    n_rows = dplyr::n(),
+    missing_covid = sum(is.na(target_covid_season)),
+    missing_post2020 = sum(is.na(target_post2020))
+  ) |>
+  print()
+
+# Inspect the indicator types and values
+str(forecast_data$target_covid_season)
+str(forecast_data$target_post2020)
+
+forecast_data |>
+  dplyr::count(
+    target_covid_season,
+    target_post2020,
+    .drop = FALSE
+  ) |>
+  print(n = Inf)
+
+# Identify the row with missing target-week indicators
+forecast_data |>
+  dplyr::filter(
+    is.na(target_covid_season) |
+      is.na(target_post2020)
+  ) |>
+  dplyr::select(
+    origin_week,
+    target_week,
+    origin_week_start,
+    target_week_start,
+    target_covid_season,
+    target_post2020
+  ) |>
+  print()
+
+# Inspect the final rows of forecast_data
+forecast_data |>
+  dplyr::slice_tail(n = 5) |>
+  dplyr::select(
+    origin_week,
+    target_week,
+    origin_week_start,
+    target_week_start,
+    target_oblig_inc_100k,
+    target_oblig_cases
+  ) |>
+  print()
+
+# Check rows without a valid one-week-ahead target
+forecast_data |>
+  dplyr::summarise(
+    rows_without_target_week = sum(is.na(target_week)),
+    rows_without_target_date = sum(is.na(target_week_start)),
+    rows_without_target_incidence = sum(is.na(target_oblig_inc_100k)),
+    rows_without_target_cases = sum(is.na(target_oblig_cases))
+  ) |>
+  print()
+```
+
+The COVID-related indicators were successfully mapped to the target weeks. Among the `r sum(!is.na(forecast_data$target_covid_season) & !is.na(forecast_data$target_post2020))` observations with valid target-week indicators, `r sum(forecast_data$target_covid_season %in% FALSE & forecast_data$target_post2020 %in% FALSE, na.rm = TRUE)` belong to neither the COVID seasons nor the post-2020 period, `r sum(forecast_data$target_covid_season %in% FALSE & forecast_data$target_post2020 %in% TRUE, na.rm = TRUE)` belong to the post-2020 period, and `r sum(forecast_data$target_covid_season %in% TRUE, na.rm = TRUE)` belong to the COVID seasons.
+
+The final row has no target week or target outcome because the dataset ends at the latest observed origin week. This is expected for one-week-ahead forecasting and does not indicate a data-joining error.
 
 # 3 Define the forecasting models
 
-We deliberately simplified Models 3 and 4 to keep the negative binomial models parsimonious and interpretable, while focusing on the incremental predictive value of Sentinella data. Model 3 uses the most recent Oblig incidence, and Model 4 adds the most recent Sentinella information. We retained Fourier terms and additional lags in the more flexible Gradient Boosting model to capture potentially more complex temporal patterns. This was a modelling choice, not a conclusion that Fourier terms were ineffective.
+We compare baseline forecasting methods with statistical and machine-learning models to assess the predictive value of Oblig incidence and the additional information provided by Sentinella. Models 3 and 4 use negative binomial GLMs with autoregressive terms and Fourier terms selected by AIC within each expanding training window. Model 3 uses Oblig information only, while Model 4 additionally selects a Sentinella predictor from the predefined candidates. These models follow the candidate-selection procedure described above. Model 5 uses Gradient Boosting to allow for more flexible relationships and temporal patterns, using the selected lagged predictors and Fourier terms. Models 6a and 6b extend Model 4 with COVID-season and post-2020 indicators, respectively, as sensitivity analyses.
 
-**Model 1 — Naive baseline**
+## Model 1 — Naive baseline
 
-Purpose: Use the most recent assumed-available Oblig incidence to forecast next week's incidence.
+Purpose: Use the most recent available Oblig incidence to forecast next week's incidence.
 
-```{r model 1}
-# Model 1: Naive baseline 
-
+```{r model_1}
 pred_model1 <- forecast_data |>
   dplyr::filter(
     target_test_season %in% TRUE,
     !is.na(target_oblig_inc_100k),
-    !is.na(oblig_lag1)
+    !is.na(oblig_inc_100k)
   ) |>
   dplyr::transmute(
     model = "Model 1: Naive",
@@ -200,15 +342,13 @@ pred_model1 <- forecast_data |>
     target_season,
     target_in_season,
     actual = target_oblig_inc_100k,
-    prediction = oblig_lag1
+    prediction = oblig_inc_100k
   )
-```
 
-```{r model 1-output}
-# Model 1: Naive baseline
 model1_output <- pred_model1 |>
   dplyr::summarise(
     n_forecasts = dplyr::n(),
+    n_missing_actuals = sum(is.na(actual)),
     n_missing_predictions = sum(is.na(prediction)),
     mean_prediction = mean(prediction, na.rm = TRUE),
     min_prediction = min(prediction, na.rm = TRUE),
@@ -224,15 +364,13 @@ knitr::kable(
 
 ***Interpretation***
 
-The model generated 154 forecasts with no missing predictions. Predicted incidence ranged from 0.055 to 36.452 per 100,000, with a mean of 5.177. This baseline assumes that next week's incidence will equal the most recently observed incidence.
+The model generated `r nrow(pred_model1)` forecasts, with `r sum(is.na(pred_model1$actual))` missing actual values and `r sum(is.na(pred_model1$prediction))` missing predictions. Predicted incidence ranged from `r round(min(pred_model1$prediction, na.rm = TRUE), 3)` to `r round(max(pred_model1$prediction, na.rm = TRUE), 3)` per 100,000 population, with a mean of `r round(mean(pred_model1$prediction, na.rm = TRUE), 3)`. This naive baseline assumes that next week's incidence will equal the observed Oblig incidence in the forecast-origin week.
 
-**Model 2 — Seasonal naive**
+## Model 2 — Seasonal naive
 
 Purpose: Use the incidence from the corresponding week in the previous season as a seasonal benchmark.
 
-```{r model 2}
-# Model 2: Seasonal naive
-
+```{r model_2}
 seasonal_lookup <- national |>
   dplyr::transmute(
     seasonal_reference_week = week_start,
@@ -252,7 +390,9 @@ pred_model2 <- forecast_data |>
     seasonal_lookup,
     by = "seasonal_reference_week"
   ) |>
-  dplyr::filter(!is.na(seasonal_prediction)) |>
+  dplyr::filter(
+    !is.na(seasonal_prediction)
+  ) |>
   dplyr::transmute(
     model = "Model 2: Seasonal naive",
     origin_week,
@@ -262,13 +402,11 @@ pred_model2 <- forecast_data |>
     actual = target_oblig_inc_100k,
     prediction = seasonal_prediction
   )
-```
 
-```{r model 2-output}
-# Model 2: Seasonal naive
 model2_output <- pred_model2 |>
   dplyr::summarise(
     n_forecasts = dplyr::n(),
+    n_missing_actuals = sum(is.na(actual)),
     n_missing_predictions = sum(is.na(prediction)),
     mean_prediction = mean(prediction, na.rm = TRUE),
     min_prediction = min(prediction, na.rm = TRUE),
@@ -284,267 +422,223 @@ knitr::kable(
 
 ***Interpretation***
 
-The model generated 154 forecasts with no missing predictions. Predicted incidence ranged from 0.045 to 42.812 per 100,000, with a mean of 5.233. It uses the incidence from approximately the same week in the previous year as a seasonal benchmark.
-
-**Model 3 — Negative Binomial GLM (Oblig-only)**
-
-Purpose: Predict next week's Oblig cases using the previous week's Oblig incidence, without Fourier seasonal terms.
-
-```{r model 3}
-# Model 3: Simplified NB GLM (Oblig-only)
-
-# 1. Define predictors
-model3_predictors <- c(
-  "oblig_log_lag1"
-)
-
-# 2. Define model formula
-model3_formula <- stats::as.formula(
-  paste(
-    "target_oblig_cases ~",
-    paste(model3_predictors, collapse = " + "),
-    "+ offset(log(target_population))"
-  )
-)
-
-# 3. Identify the first test forecast origin
-first_test_row <- which(
-  forecast_data$target_test_season %in% TRUE &
-    !is.na(forecast_data$target_oblig_cases) &
-    !is.na(forecast_data$target_population) &
-    forecast_data$target_population > 0 &
-    !is.na(forecast_data$oblig_log_lag1)
-)[1]
-
-# 4. Determine the forecast origin date
-origin_date_example <-
-  forecast_data$week_start[first_test_row]
-
-# 5. Construct the training data using only
-# information available before the forecast target week
-train_data_example <- forecast_data |>
-  dplyr::filter(
-    !is.na(target_week_start),
-    target_week_start <= origin_date_example - 7,
-    !is.na(target_oblig_cases),
-    target_oblig_cases >= 0,
-    !is.na(target_population),
-    target_population > 0,
-    dplyr::if_all(
-      dplyr::all_of(model3_predictors),
-      ~ !is.na(.x)
-    )
-  )
-
-# 6. Fit the example model
-model3_example <- MASS::glm.nb(
-  formula = model3_formula,
-  data = train_data_example
-)
-
-# 7. Inspect the fitted model
-model3_summary <- summary(model3_example)
-
-# Display coefficient estimates, standard errors and p-values
-model3_coefficients <- as.data.frame(
-  model3_summary$coefficients
-)
-print(model3_coefficients)
-
-# Display model fit statistics
-cat("AIC:", AIC(model3_example), "\n")
-cat("Theta:", model3_summary$theta, "\n")
-```
-
-***Interpretation***
-
-Lagged Oblig incidence was positively associated with the expected influenza case count (β = 1.421, p \< 0.001). The model's AIC was 36,807.62. The very large estimated theta (2,236,828) indicates that the fitted negative binomial distribution is close to the Poisson limit.
-
-**Model 4 — Negative Binomial GLM (Oblig + Sentinella)**
-
-Purpose: Predict next week's Oblig cases using the previous week's Oblig incidence and Sentinella ILI activity.
-
-```{r model 4}
-# Model 4: Simplified NB GLM (Oblig + Sentinella)
-
-# 1. Define predictors
-model4_predictors <- c(
-  "oblig_log_lag1",
-  "sent_log_lag1"
-)
-
-# 2. Define model formula
-model4_formula <- stats::as.formula(
-  paste(
-    "target_oblig_cases ~",
-    paste(model4_predictors, collapse = " + "),
-    "+ offset(log(target_population))"
-  )
-)
-
-# 3. Identify the first test forecast origin
-first_test_candidates <- which(
-  forecast_data$target_test_season %in% TRUE &
-    !is.na(forecast_data$target_oblig_cases) &
-    !is.na(forecast_data$target_population) &
-    forecast_data$target_population > 0 &
-    stats::complete.cases(
-      forecast_data[, model4_predictors, drop = FALSE]
-    )
-)
-
-first_test_row <- first_test_candidates[1]
-
-# 4. Determine the forecast origin date
-origin_date_example <-
-  forecast_data$week_start[first_test_row]
-
-# 5. Construct the training data using only
-# information available before the forecast target week
-train_data_example_m4 <- forecast_data |>
-  dplyr::filter(
-    !is.na(target_week_start),
-    target_week_start <= origin_date_example - 7,
-    !is.na(target_oblig_cases),
-    target_oblig_cases >= 0,
-    !is.na(target_population),
-    target_population > 0,
-    dplyr::if_all(
-      dplyr::all_of(model4_predictors),
-      ~ !is.na(.x)
-    )
-  )
-
-# 6. Fit the example model
-model4_example <- MASS::glm.nb(
-  formula = model4_formula,
-  data = train_data_example_m4
-)
-
-# 7. Inspect the fitted model
-model4_summary <- summary(model4_example)
-
-# Display coefficient estimates, standard errors and p-values
-model4_coefficients <- as.data.frame(
-  model4_summary$coefficients
-)
-print(model4_coefficients)
-
-# Display model fit statistics
-cat("AIC:", AIC(model4_example), "\n")
-cat("Theta:", model4_summary$theta, "\n")
-```
-
-***Interpretation***
-
-Both lagged Oblig incidence (β = 1.230, p \< 0.001) and lagged Sentinella activity (β = 0.283, p \< 0.001) were positively associated with the expected case count. Model 4 had a lower AIC (34,530.54) than Model 3 (36,807.62), indicating a better fit after accounting for model complexity. However, out-of-sample performance must be assessed separately. The very large estimated theta (2,328,368) indicates that the fitted negative binomial distribution is close to the Poisson limit.
-
-**Model 5 — Gradient Boosting (Oblig + Sentinella)**
-
-Purpose: Provide a nonlinear robustness check using the same Oblig and Sentinella lagged predictors and seasonal terms.
-
-```{r model 5}
-# Model 5: Gradient Boosting (Oblig + Sentinella)
-
-# Keep the original 9 predictors
-model5_predictors <- c(
-  "oblig_log_lag1",
-  "sent_log_lag1",
-  "sent_log_lag2",
-  "sent_log_lag3",
-  "sent_log_lag4",
-  "sin1", "cos1", "sin2", "cos2"
-)
-
-model5_formula <- stats::reformulate(
-  model5_predictors,
-  response = "target_oblig_inc_100k"
-)
-
-train_data_gbm_example <- forecast_data |>
-  dplyr::filter(
-    !is.na(target_week_start),
-    target_week_start <= origin_date_example,
-    !is.na(target_oblig_inc_100k),
-    !is.na(target_oblig_cases),
-    target_oblig_cases >= 0,
-    !is.na(target_population),
-    target_population > 0,
-    dplyr::if_all(
-      dplyr::all_of(model5_predictors),
-      ~ !is.na(.x)
-    )
-  )
-
-set.seed(121)
-
-model5_example <- gbm::gbm(
-  formula = model5_formula,
-  data = train_data_gbm_example,
-  distribution = "gaussian",
-  n.trees = 500,
-  interaction.depth = 2,
-  shrinkage = 0.01,
-  n.minobsinnode = 10,
-  bag.fraction = 0.8,
-  train.fraction = 1,
-  verbose = FALSE
-)
-
-summary(model5_example)
-```
-
-***Interpretation***
-
-Lagged Oblig incidence (`oblig_log_lag1`) dominated the model's relative influence (91.64%). The remaining predictors, including lagged Sentinella variables and Fourier terms, had much smaller relative influence. The Fourier terms capture seasonal patterns. These importance scores reflect the model's use of predictors, not causal effects or guaranteed improvements in forecast accuracy.
+The model generated `r nrow(pred_model2)` forecasts, with `r sum(is.na(pred_model2$actual))` missing actual values and `r sum(is.na(pred_model2$prediction))` missing predictions. Predicted incidence ranged from `r round(min(pred_model2$prediction, na.rm = TRUE), 3)` to `r round(max(pred_model2$prediction, na.rm = TRUE), 3)` per 100,000 population, with a mean of `r round(mean(pred_model2$prediction, na.rm = TRUE), 3)`. This seasonal naive baseline uses the observed incidence from 364 days before the target week as the prediction for the target week.
 
 **Rolling-origin expanding-window forecasts**
 
-This function fits Models 3 and 4 using Negative Binomial GLM, or Model 5 using Gradient Boosting. It restricts training targets to weeks ending at least one week before the forecast origin, uses the same complete-case training rows, and converts predicted counts into incidence per 100,000.
+Purpose: Rolling-origin expanding-window forecasts were generated for seven models across the three test seasons (2023/24, 2024/25 and 2025/26). At each forecast origin, models were fitted using the available historical data and used to predict influenza incidence one week ahead. The training window expanded as new observations became available, while the training cutoff ensured that the target outcome was not used before it could reasonably be observed.
 
-```{r}
+The resulting forecasts were subsequently aligned on common target weeks and evaluated using MAE and RMSE.
+
+```{r rolling_origin_expanding_window_forecasts}
+# =============================================================================
 # Rolling-origin expanding-window forecasts
+# Models 3, 4, and 5
+# =============================================================================
 
-# Model-specific predictors
-model3_predictors <- c("oblig_log_lag1")
+# -----------------------------------------------------------------------------
+# 1. Candidate predictors for NB GLM model selection
+# -----------------------------------------------------------------------------
 
-model4_predictors <- c(
-  "oblig_log_lag1",
-  "sent_log_lag1"
-)
+# Autoregressive candidates: Oblig incidence observed at the forecast origin
+ar_candidates <- list(
+  AR1 = c("oblig_log_origin"),
 
-model5_predictors <- c(
-  "oblig_log_lag1",
-  "sent_log_lag1",
-  "sent_log_lag2",
-  "sent_log_lag3",
-  "sent_log_lag4",
-  "sin1", "cos1", "sin2", "cos2"
-)
+  AR2 = c(
+    "oblig_log_origin",
+    "oblig_log_prev1"
+  ),
 
-# Model formulas
-model3_formula <- stats::as.formula(
-  paste(
-    "target_oblig_cases ~",
-    paste(model3_predictors, collapse = " + "),
-    "+ offset(log(target_population))"
+  AR3 = c(
+    "oblig_log_origin",
+    "oblig_log_prev1",
+    "oblig_log_prev2"
+  ),
+
+  AR4 = c(
+    "oblig_log_origin",
+    "oblig_log_prev1",
+    "oblig_log_prev2",
+    "oblig_log_prev3"
   )
 )
 
-model4_formula <- stats::as.formula(
-  paste(
-    "target_oblig_cases ~",
-    paste(model4_predictors, collapse = " + "),
-    "+ offset(log(target_population))"
+
+# Fourier candidates: K = 1, 2, or 3
+fourier_candidates <- list(
+  K1 = c("sin1", "cos1"),
+
+  K2 = c(
+    "sin1", "cos1",
+    "sin2", "cos2"
+  ),
+
+  K3 = c(
+    "sin1", "cos1",
+    "sin2", "cos2",
+    "sin3", "cos3"
   )
 )
 
-model5_formula <- stats::reformulate(
-  model5_predictors,
-  response = "target_oblig_inc_100k"
+
+# Sentinella candidates selected using the WP 4.3 analysis
+sentinella_candidates <- c(
+  "sent_log_origin",
+  "sent_log_prev1"
 )
 
-# Expanding-window forecasting function
+
+# -----------------------------------------------------------------------------
+# 2. Select the NB GLM specification within one training window
+# -----------------------------------------------------------------------------
+
+select_nb_model <- function(train_data, include_sent = FALSE) {
+
+  # Use a common complete-case sample for all candidate specifications.
+  # For Model 3, Sentinella is not included in the formula.
+  # For Model 4, both Sentinella candidates must be available so that
+  # their alternative specifications can be compared fairly.
+
+  all_predictors <- unique(c(
+    unlist(ar_candidates, use.names = FALSE),
+    unlist(fourier_candidates, use.names = FALSE),
+    if (include_sent) sentinella_candidates
+  ))
+
+  train_complete <- train_data |>
+    dplyr::filter(
+      !is.na(target_oblig_cases),
+      is.finite(target_oblig_cases),
+      target_oblig_cases >= 0,
+
+      !is.na(target_population),
+      is.finite(target_population),
+      target_population > 0,
+
+      dplyr::if_all(
+        dplyr::all_of(all_predictors),
+        ~ !is.na(.x) & is.finite(.x)
+      )
+    )
+
+  if (nrow(train_complete) == 0) {
+    stop(
+      "No complete training rows available for NB model selection."
+    )
+  }
+
+  candidates <- list()
+  j <- 0L
+
+  # Compare all AR lag and Fourier K combinations.
+  # For Model 4, also compare the two Sentinella candidates.
+
+  for (ar_name in names(ar_candidates)) {
+
+    for (fourier_name in names(fourier_candidates)) {
+
+      sent_options <- if (include_sent) {
+        sentinella_candidates
+      } else {
+        NA_character_
+      }
+
+      for (sent_var in sent_options) {
+
+        predictors <- c(
+          ar_candidates[[ar_name]],
+          fourier_candidates[[fourier_name]],
+          if (include_sent) sent_var
+        )
+
+        model_formula <- stats::as.formula(
+          paste(
+            "target_oblig_cases ~",
+            paste(predictors, collapse = " + "),
+            "+ offset(log(target_population))"
+          )
+        )
+
+        fitted_model <- tryCatch(
+          suppressWarnings(
+            MASS::glm.nb(
+              formula = model_formula,
+              data = train_complete
+            )
+          ),
+          error = function(e) NULL
+        )
+
+        if (!is.null(fitted_model)) {
+
+          model_aic <- stats::AIC(fitted_model)
+
+          if (is.finite(model_aic)) {
+
+            j <- j + 1L
+
+            candidates[[j]] <- list(
+              model = fitted_model,
+              formula = model_formula,
+              predictors = predictors,
+              AR = ar_name,
+              Fourier = fourier_name,
+              Sentinella = sent_var,
+              AIC = model_aic
+            )
+          }
+        }
+      }
+    }
+  }
+
+  if (length(candidates) == 0) {
+    stop("All candidate NB GLMs failed to fit.")
+  }
+
+  # Select the candidate with the lowest AIC.
+  aic_values <- vapply(
+    candidates,
+    function(x) x$AIC,
+    numeric(1)
+  )
+
+  best <- candidates[[which.min(aic_values)]]
+
+  list(
+    model = best$model,
+    predictors = best$predictors,
+    AR = best$AR,
+    Fourier = best$Fourier,
+    Sentinella = best$Sentinella,
+    AIC = best$AIC,
+    n_train = nrow(train_complete)
+  )
+}
+
+
+# -----------------------------------------------------------------------------
+# 3. Define the common complete-case predictor set
+# -----------------------------------------------------------------------------
+
+# Models 3, 4, and 5 use the same eligible test weeks.
+# This also allows evaluation on common target weeks.
+
+common_predictors <- unique(c(
+  unlist(ar_candidates, use.names = FALSE),
+  unlist(fourier_candidates, use.names = FALSE),
+  sentinella_candidates
+))
+
+
+# Model 5 uses the predictors selected by Model 4 in each training window.
+# Do not define a separate, fixed gbm_predictors vector.
+
+
+# -----------------------------------------------------------------------------
+# 4. Expanding-window forecasting function
+# -----------------------------------------------------------------------------
+
 run_expanding_model <- function(
   data,
   model_type = c("NB_oblig", "NB_combined", "GBM"),
@@ -553,81 +647,42 @@ run_expanding_model <- function(
 
   model_type <- match.arg(model_type)
 
-  # ----------------------------------------------------------
-  # 1. Define predictors
-  # ----------------------------------------------------------
 
-  combined_predictors <- c(
-    "oblig_log_lag1",
-    "sent_log_lag1"
-  )
-
-  gbm_predictors <- c(
-    "oblig_log_lag1",
-    "sent_log_lag1",
-    "sent_log_lag2",
-    "sent_log_lag3",
-    "sent_log_lag4",
-    "sin1",
-    "cos1",
-    "sin2",
-    "cos2"
-  )
-
-  # M3 and M4 must use the same training observations.
-  common_predictors <- combined_predictors
-
-  # ----------------------------------------------------------
-  # 2. Select test weeks
-  # ----------------------------------------------------------
+  # ---------------------------------------------------------------------------
+  # 4.1 Select eligible test weeks
+  # ---------------------------------------------------------------------------
 
   test_rows <- data |>
-    filter(
+    dplyr::filter(
       target_season %in% TEST_SEASONS,
+
       !is.na(target_week_start),
       !is.na(week_start),
 
-      # Require a valid observed outcome.
       !is.na(target_oblig_inc_100k),
       is.finite(target_oblig_inc_100k),
 
-      # Require a valid, positive population.
       !is.na(target_population),
       is.finite(target_population),
-      target_population > 0
+      target_population > 0,
+
+      # Require all candidate predictors to be available.
+      # This ensures a common evaluation sample across Models 3–5.
+      dplyr::if_all(
+        dplyr::all_of(common_predictors),
+        ~ !is.na(.x) & is.finite(.x)
+      )
     ) |>
-    arrange(target_week_start)
+    dplyr::arrange(target_week_start)
 
-  # M3 and M4 use the same test weeks.
-  if (model_type %in% c("NB_oblig", "NB_combined")) {
-
-    test_rows <- test_rows |>
-      filter(
-        if_all(
-          all_of(common_predictors),
-          ~ !is.na(.x) & is.finite(.x)
-        )
-      )
-
-  } else {
-
-    test_rows <- test_rows |>
-      filter(
-        if_all(
-          all_of(gbm_predictors),
-          ~ !is.na(.x) & is.finite(.x)
-        )
-      )
-  }
-
-  # Stop if no eligible test weeks remain.
   if (nrow(test_rows) == 0) {
     stop("No eligible test weeks remain after filtering.")
   }
 
-  # ----------------------------------------------------------
-  # 3. Expanding-window forecasts
-  # ----------------------------------------------------------
+
+  # ---------------------------------------------------------------------------
+  # 4.2 Generate one-week-ahead forecasts at each forecast origin
+  # ---------------------------------------------------------------------------
 
   results <- vector("list", nrow(test_rows))
 
@@ -638,32 +693,45 @@ run_expanding_model <- function(
     # Forecast origin: start of the predictor week.
     origin_date <- as.Date(new_data$week_start[[1]])
 
-    # Interim cutoff rule:
-    # use training outcomes from target weeks that started
-    # at least 7 days before the forecast origin.
+    # Conservative training cutoff:
+    # only use outcomes whose target week started at least 7 days
+    # before the forecast origin.
     train_data <- data |>
-      filter(
+      dplyr::filter(
+        !is.na(target_week_start),
         target_week_start <= origin_date - 7,
+
         !is.na(target_oblig_cases),
         is.finite(target_oblig_cases),
+        target_oblig_cases >= 0,
+
         !is.na(target_oblig_inc_100k),
         is.finite(target_oblig_inc_100k),
+
         !is.na(target_population),
         is.finite(target_population),
         target_population > 0
       )
 
-    # --------------------------------------------------------
-    # 4. Fit and predict
-    # --------------------------------------------------------
+
+    # Initialise model-selection metadata.
+    selected_AR <- NA_character_
+    selected_Fourier <- NA_character_
+    selected_Sentinella <- NA_character_
+    selected_AIC <- NA_real_
+
+
+    # -------------------------------------------------------------------------
+    # 4.3 Models 3 and 4: Negative Binomial GLM
+    # -------------------------------------------------------------------------
 
     if (model_type %in% c("NB_oblig", "NB_combined")) {
 
-      # M3 and M4 use exactly the same training rows.
+      # Use the same complete-case training observations for Models 3 and 4.
       common_train <- train_data |>
-        filter(
-          if_all(
-            all_of(common_predictors),
+        dplyr::filter(
+          dplyr::if_all(
+            dplyr::all_of(common_predictors),
             ~ !is.na(.x) & is.finite(.x)
           )
         )
@@ -675,46 +743,100 @@ run_expanding_model <- function(
         )
       }
 
+      # Re-select the model specification inside this training window.
       if (model_type == "NB_oblig") {
 
-        fit <- MASS::glm.nb(
-          target_oblig_cases ~ oblig_log_lag1 +
-            offset(log(target_population)),
-          data = common_train
+        selected_model <- select_nb_model(
+          train_data = common_train,
+          include_sent = FALSE
         )
 
       } else {
 
-        fit <- MASS::glm.nb(
-          target_oblig_cases ~ oblig_log_lag1 +
-            sent_log_lag1 +
-            offset(log(target_population)),
-          data = common_train
+        selected_model <- select_nb_model(
+          train_data = common_train,
+          include_sent = TRUE
         )
+
       }
 
-      # Predict target-week case counts, then convert to
-      # incidence per 100,000 population.
-      predicted_cases <- predict(
+      fit <- selected_model$model
+
+      # Save selected model structure for later auditing.
+      selected_AR <- selected_model$AR
+      selected_Fourier <- selected_model$Fourier
+      selected_AIC <- selected_model$AIC
+
+      if (model_type == "NB_combined") {
+        selected_Sentinella <- selected_model$Sentinella
+      }
+
+      # Predict weekly case counts.
+      predicted_cases <- stats::predict(
         fit,
         newdata = new_data,
         type = "response"
       )
 
+      # Convert predicted counts to incidence per 100,000.
       prediction <- as.numeric(
         predicted_cases /
           new_data$target_population * 100000
       )
 
-      n_train <- nrow(common_train)
+      n_train <- selected_model$n_train
+
+
+    # -------------------------------------------------------------------------
+    # 4.4 Model 5: Gradient Boosting using Model 4's selected predictors
+    # -------------------------------------------------------------------------
 
     } else {
 
-      # GBM uses its own required predictors.
-      gbm_train <- train_data |>
-        filter(
-          if_all(
-            all_of(gbm_predictors),
+      # First select the Model 4 NB specification using this training window.
+      # The selected predictor set is then reused for Gradient Boosting.
+
+      common_train <- train_data |>
+        dplyr::filter(
+          dplyr::if_all(
+            dplyr::all_of(common_predictors),
+            ~ !is.na(.x) & is.finite(.x)
+          )
+        )
+
+      if (nrow(common_train) == 0) {
+        stop(
+          "No common training observations for Model 5 at origin: ",
+          as.character(origin_date)
+        )
+      }
+
+      selected_m4 <- select_nb_model(
+        train_data = common_train,
+        include_sent = TRUE
+      )
+
+      model5_predictors <- selected_m4$predictors
+
+      # Store the same selected structure used by Model 4.
+      selected_AR <- selected_m4$AR
+      selected_Fourier <- selected_m4$Fourier
+      selected_Sentinella <- selected_m4$Sentinella
+      selected_AIC <- selected_m4$AIC
+
+      # Gradient Boosting predicts incidence directly.
+      model5_formula <- stats::reformulate(
+        model5_predictors,
+        response = "target_oblig_inc_100k"
+      )
+
+      gbm_train <- common_train |>
+        dplyr::filter(
+          !is.na(target_oblig_inc_100k),
+          is.finite(target_oblig_inc_100k),
+
+          dplyr::if_all(
+            dplyr::all_of(model5_predictors),
             ~ !is.na(.x) & is.finite(.x)
           )
         )
@@ -726,15 +848,10 @@ run_expanding_model <- function(
         )
       }
 
-      gbm_formula <- stats::reformulate(
-        termlabels = gbm_predictors,
-        response = "target_oblig_inc_100k"
-      )
-
       set.seed(121)
 
       fit <- gbm::gbm(
-        formula = gbm_formula,
+        formula = model5_formula,
         data = gbm_train,
         distribution = "gaussian",
         n.trees = 500,
@@ -742,11 +859,12 @@ run_expanding_model <- function(
         shrinkage = 0.01,
         n.minobsinnode = 10,
         bag.fraction = 0.8,
+        train.fraction = 1,
         verbose = FALSE
       )
 
       prediction <- as.numeric(
-        predict(
+        stats::predict(
           fit,
           newdata = new_data,
           n.trees = 500,
@@ -757,76 +875,664 @@ run_expanding_model <- function(
       n_train <- nrow(gbm_train)
     }
 
-    # --------------------------------------------------------
-    # 5. Save the forecast
-    # --------------------------------------------------------
 
-    results[[i]] <- tibble(
+    # -------------------------------------------------------------------------
+    # 4.5 Save forecast and model-selection metadata
+    # -------------------------------------------------------------------------
+
+    results[[i]] <- tibble::tibble(
       model = model_name,
-      origin_week = as.character(new_data$iso_week[[1]]),
-      target_week = as.character(new_data$target_week[[1]]),
+
+      origin_week = as.character(
+        new_data$iso_week[[1]]
+      ),
+
+      target_week = as.character(
+        new_data$target_week[[1]]
+      ),
+
       target_week_start = as.Date(
         new_data$target_week_start[[1]]
       ),
+
       target_season = as.character(
         new_data$target_season[[1]]
       ),
+
       target_in_season = new_data$target_in_season[[1]],
+
       actual = as.numeric(
         new_data$target_oblig_inc_100k[[1]]
       ),
+
       prediction = prediction,
-      n_train = n_train
+
+      n_train = n_train,
+
+      selected_AR = selected_AR,
+      selected_Fourier = selected_Fourier,
+      selected_Sentinella = selected_Sentinella,
+      selected_AIC = selected_AIC
     )
+
   }
 
-  # ----------------------------------------------------------
-  # 6. Return forecast results
-  # ----------------------------------------------------------
+
+  # ---------------------------------------------------------------------------
+  # 5. Return forecasts for all eligible test weeks
+  # ---------------------------------------------------------------------------
+
+  dplyr::bind_rows(results)
+}
+```
+
+## Model 3 — Negative Binomial GLM (Oblig-only)
+
+The model predicts Oblig incidence for the target week using reported Oblig cases. The response variable is `target_oblig_cases`, and a population offset is included to account for population size. Predicted case counts are converted to incidence per 100,000 population. At each forecast origin, AIC is used to select the autoregressive lag structure (AR1–AR4) and the number of Fourier terms (K1–K3) from the candidate specifications, using only the training data available at that origin.
+
+```{r model_3}
+# Generate expanding-window forecasts
+pred_model3 <- run_expanding_model(
+  data = forecast_data,
+  model_type = "NB_oblig",
+  model_name = "Model 3: NB GLM Oblig-only"
+)
+
+# Check that forecasts were generated
+if (nrow(pred_model3) == 0) {
+  stop("Model 3 returned no forecasts.")
+}
+
+# Inspect the first 10 forecasts
+pred_model3 |>
+  dplyr::select(
+    origin_week,
+    target_week,
+    target_season,
+    actual,
+    prediction,
+    n_train,
+    selected_AR,
+    selected_Fourier,
+    selected_AIC
+  ) |>
+  print(n = 10, width = Inf)
+
+# Summarise forecast coverage
+model3_summary <- pred_model3 |>
+  dplyr::summarise(
+    n_forecasts = dplyr::n(),
+    n_missing_actuals = sum(is.na(actual)),
+    n_missing_predictions = sum(is.na(prediction)),
+    n_non_finite_predictions = sum(!is.finite(prediction)),
+    mean_prediction = mean(prediction, na.rm = TRUE),
+    min_prediction = min(prediction, na.rm = TRUE),
+    max_prediction = max(prediction, na.rm = TRUE)
+  )
+
+print(model3_summary)
+```
+
+Note: The coefficient estimates, AIC, and theta reported below are from the illustrative fit at the first test forecast origin. The final forecasting evaluation is based on the rolling-origin expanding-window procedure, in which the model is re-selected and refitted at each forecast origin.
+
+***Interpretation***
+
+The model generated `r nrow(pred_model3)` forecasts, with `r sum(is.na(pred_model3$actual))` missing actual values, `r sum(is.na(pred_model3$prediction))` missing predictions, and `r sum(!is.finite(pred_model3$prediction))` non-finite predictions. Predicted incidence ranged from `r round(min(pred_model3$prediction, na.rm = TRUE), 3)` to `r round(max(pred_model3$prediction, na.rm = TRUE), 3)` per 100,000 population, with a mean of `r round(mean(pred_model3$prediction, na.rm = TRUE), 3)`. At each forecast origin, AIC was used to select the autoregressive lag structure and Fourier terms from the candidate specifications, using the available training data.
+
+## Model 4 — Negative Binomial GLM (Oblig + Sentinella)
+
+This model uses the same candidate autoregressive lag structures and Fourier terms as Model 3, while additionally selecting between `sent_log_origin` and `sent_log_prev1`. Model selection is performed separately within each expanding training window using AIC, without using information from the future test period.
+
+```{r model_4}
+# Generate expanding-window forecast
+pred_model4 <- run_expanding_model(
+  data = forecast_data,
+  model_type = "NB_combined",
+  model_name = "Model 4: NB GLM Oblig + Sentinella"
+)
+
+# Check that forecasts were generated
+if (nrow(pred_model4) == 0) {
+  stop("Model 4 produced no forecasts. Check the test-season and training filters.")
+}
+
+# Inspect the forecasts and selected Sentinella predictor
+pred_model4 |>
+  dplyr::select(
+    origin_week,
+    target_week,
+    target_season,
+    actual,
+    prediction,
+    n_train,
+    selected_AR,
+    selected_Fourier,
+    selected_Sentinella,
+    selected_AIC
+  ) |>
+  print(n = 10, width = Inf)
+
+# Summarise forecast coverage and prediction validity
+model4_summary <- pred_model4 |>
+  dplyr::summarise(
+    n_forecasts = dplyr::n(),
+    n_missing_actuals = sum(is.na(actual)),
+    n_missing_predictions = sum(is.na(prediction)),
+    n_non_finite_predictions = sum(!is.finite(prediction)),
+    mean_prediction = mean(prediction, na.rm = TRUE),
+    min_prediction = min(prediction, na.rm = TRUE),
+    max_prediction = max(prediction, na.rm = TRUE)
+  )
+
+print(model4_summary)
+
+# Inspect how often each model specification was selected
+model4_specification_counts <- pred_model4 |>
+  dplyr::count(
+    selected_AR,
+    selected_Fourier,
+    selected_Sentinella,
+    name = "n_forecasts"
+  ) |>
+  dplyr::arrange(dplyr::desc(n_forecasts))
+
+print(model4_specification_counts, n = Inf)
+```
+
+Note: The coefficient estimates, AIC, and theta reported below are from the illustrative fit at the first test forecast origin. The final forecasting evaluation is based on the rolling-origin expanding-window procedure, in which the model is re-selected and refitted at each forecast origin.
+
+***Interpretation***
+
+The model generated `r nrow(pred_model4)` forecasts, with `r sum(is.na(pred_model4$actual))` missing actual values, `r sum(is.na(pred_model4$prediction))` missing predictions, and `r sum(!is.finite(pred_model4$prediction))` non-finite predictions. Predicted incidence ranged from `r round(min(pred_model4$prediction, na.rm = TRUE), 3)` to `r round(max(pred_model4$prediction, na.rm = TRUE), 3)` per 100,000 population, with a mean of `r round(mean(pred_model4$prediction, na.rm = TRUE), 3)`. At each forecast origin, AIC was used to select the autoregressive lag structure, the number of Fourier terms, and the Sentinella predictor from the candidate specifications, using only the available training data.
+
+## Model 5 — Gradient Boosting
+
+At each forecast origin, the AIC-based selection procedure used in Model 4 is applied first. The selected predictor set is then used to fit the Gradient Boosting model. Unlike Model 4, which models case counts using a negative binomial GLM with a population offset, Model 5 directly predicts `target_oblig_inc_100k`. This allows the two modelling approaches to be compared while keeping predictor selection consistent.
+
+```{r model_5}
+# Generate expanding-window forecast
+pred_model5 <- run_expanding_model(
+  data = forecast_data,
+  model_type = "GBM",
+  model_name = "Model 5: Gradient Boosting"
+)
+
+# Check that forecasts were generated
+if (nrow(pred_model5) == 0) {
+  stop("Model 5 produced no forecasts. Check the test-season and training filters.")
+}
+
+# Inspect forecasts and the predictor specification inherited from Model 4
+pred_model5 |>
+  dplyr::select(
+    origin_week,
+    target_week,
+    target_season,
+    actual,
+    prediction,
+    n_train,
+    selected_AR,
+    selected_Fourier,
+    selected_Sentinella,
+    selected_AIC
+  ) |>
+  print(n = 10, width = Inf)
+
+# Summarise forecast coverage and prediction validity
+model5_summary <- pred_model5 |>
+  dplyr::summarise(
+    n_forecasts = dplyr::n(),
+    n_missing_actuals = sum(is.na(actual)),
+    n_missing_predictions = sum(is.na(prediction)),
+    n_non_finite_predictions = sum(!is.finite(prediction)),
+    mean_prediction = mean(prediction, na.rm = TRUE),
+    min_prediction = min(prediction, na.rm = TRUE),
+    max_prediction = max(prediction, na.rm = TRUE)
+  )
+
+print(model5_summary)
+```
+
+***Interpretation***
+
+The model generated `r nrow(pred_model5)` forecasts, with `r sum(is.na(pred_model5$actual))` missing actual values, `r sum(is.na(pred_model5$prediction))` missing predictions, and `r sum(!is.finite(pred_model5$prediction))` non-finite predictions. Predicted incidence ranged from `r round(min(pred_model5$prediction, na.rm = TRUE), 3)` to `r round(max(pred_model5$prediction, na.rm = TRUE), 3)` per 100,000 population, with a mean of `r round(mean(pred_model5$prediction, na.rm = TRUE), 3)`. At each forecast origin, the predictor set selected by the AIC-based procedure used in Model 4 was used to fit the Gradient Boosting model.
+
+## Model 6 — Sensitivity analysis for COVID and post-2020 indicators
+
+###  Model 6a: NB GLM from Model 4 + COVID-season indicator\
+###  Model 6b: NB GLM from Model 4 + post2020 level-shift indicator\
+
+```{r model_6}
+# =============================================================================
+# Model 6: Sensitivity analysis for COVID and post-2020 indicators
+# =============================================================================
+
+run_nb_indicator_sensitivity <- function(
+    data,
+    indicator,
+    model_name
+) {
+
+  # ---------------------------------------------------------------------------
+  # 1. Select eligible test weeks
+  # ---------------------------------------------------------------------------
+
+  test_rows <- data |>
+    dplyr::filter(
+      target_season %in% TEST_SEASONS,
+      !is.na(target_week_start),
+      !is.na(week_start),
+      !is.na(target_oblig_inc_100k),
+      is.finite(target_oblig_inc_100k),
+      !is.na(target_population),
+      is.finite(target_population),
+      target_population > 0,
+      !is.na(.data[[indicator]]),
+      dplyr::if_all(
+        dplyr::all_of(common_predictors),
+        ~ !is.na(.x) & is.finite(.x)
+      )
+    ) |>
+    dplyr::arrange(target_week_start)
+
+  if (nrow(test_rows) == 0) {
+    stop("No eligible test weeks for ", model_name)
+  }
+
+  results <- vector("list", nrow(test_rows))
+
+  # ---------------------------------------------------------------------------
+  # 2. Expanding-window forecasting
+  # ---------------------------------------------------------------------------
+
+  for (i in seq_len(nrow(test_rows))) {
+
+    new_data <- test_rows[i, ]
+    origin_date <- as.Date(new_data$week_start[[1]])
+
+    # Apply the same conservative training cutoff as Models 3-5.
+    train_data <- data |>
+      dplyr::filter(
+        !is.na(target_week_start),
+        target_week_start <= origin_date - 7,
+        !is.na(target_oblig_cases),
+        is.finite(target_oblig_cases),
+        target_oblig_cases >= 0,
+        !is.na(target_oblig_inc_100k),
+        is.finite(target_oblig_inc_100k),
+        !is.na(target_population),
+        is.finite(target_population),
+        target_population > 0,
+        !is.na(.data[[indicator]]),
+        dplyr::if_all(
+          dplyr::all_of(common_predictors),
+          ~ !is.na(.x) & is.finite(.x)
+        )
+      )
+
+    if (nrow(train_data) == 0) {
+      stop("No eligible training rows at ", as.character(origin_date))
+    }
+
+    # Select the Model 4 specification within this training window.
+    selected_model <- select_nb_model(
+      train_data = train_data,
+      include_sent = TRUE
+    )
+
+    # Add one indicator to the selected Model 4 specification.
+    sensitivity_predictors <- c(
+      selected_model$predictors,
+      indicator
+    )
+
+    sensitivity_formula <- stats::as.formula(
+      paste(
+        "target_oblig_cases ~",
+        paste(sensitivity_predictors, collapse = " + "),
+        "+ offset(log(target_population))"
+      )
+    )
+
+    # Refit the NB GLM with the sensitivity indicator.
+    fit <- MASS::glm.nb(
+      formula = sensitivity_formula,
+      data = train_data
+    )
+
+    # Predict case counts, then convert to incidence per 100,000.
+    predicted_cases <- stats::predict(
+      fit,
+      newdata = new_data,
+      type = "response"
+    )
+
+    prediction <- as.numeric(
+      predicted_cases /
+        new_data$target_population * 100000
+    )
+
+    if (length(prediction) != 1 || !is.finite(prediction)) {
+      stop(
+        "Invalid prediction for ", model_name,
+        " at ", as.character(origin_date)
+      )
+    }
+
+    results[[i]] <- tibble::tibble(
+      model = model_name,
+      origin_week = as.character(new_data$iso_week[[1]]),
+      target_week = as.character(new_data$target_week[[1]]),
+      target_week_start = as.Date(new_data$target_week_start[[1]]),
+      target_season = as.character(new_data$target_season[[1]]),
+      target_in_season = new_data$target_in_season[[1]],
+      actual = as.numeric(new_data$target_oblig_inc_100k[[1]]),
+      prediction = prediction,
+      n_train = selected_model$n_train,
+      selected_AR = selected_model$AR,
+      selected_Fourier = selected_model$Fourier,
+      selected_Sentinella = selected_model$Sentinella,
+      selected_AIC = selected_model$AIC
+    )
+  }
 
   dplyr::bind_rows(results)
 }
 
+
+# ---------------------------------------------------------------------------
+# Model 6a: Model 4 + COVID-season indicator
+# ---------------------------------------------------------------------------
+
+model6a_covid <- run_nb_indicator_sensitivity(
+  data = forecast_data,
+  indicator = "target_covid_season",
+  model_name = "Model 6a - NB + COVID indicator"
+)
+
+
+# ---------------------------------------------------------------------------
+# Model 6b: Model 4 + post-2020 indicator
+# ---------------------------------------------------------------------------
+
+model6b_post2020 <- run_nb_indicator_sensitivity(
+  data = forecast_data,
+  indicator = "target_post2020",
+  model_name = "Model 6b - NB + post-2020 indicator"
+)
+
+
+# ---------------------------------------------------------------------------
+# Basic checks
+# ---------------------------------------------------------------------------
+
+cat("Model 6a rows:", nrow(model6a_covid), "\n")
+cat("Model 6b rows:", nrow(model6b_post2020), "\n")
+
+model6a_covid |>
+  dplyr::count(target_season) |>
+  print()
+
+model6b_post2020 |>
+  dplyr::count(target_season) |>
+  print()
+
+summary(model6a_covid$prediction)
+summary(model6b_post2020$prediction)
 ```
 
-```{r}
-pred_model3 <- run_expanding_model(
-  data = forecast_data,
-  model_type = "NB_oblig",
-  model_name = "NB Oblig-only (simplified)"
-)
+***Interpretation***
 
-pred_model4 <- run_expanding_model(
-  data = forecast_data,
-  model_type = "NB_combined",
-  model_name = "NB Oblig + Sentinella (simplified)"
-)
+The model Model 6a generated `r nrow(model6a_covid)` forecasts across `r dplyr::n_distinct(model6a_covid$target_season)` test seasons. The number of forecasts by season was `r paste(paste0(names(table(model6a_covid$target_season)), ": ", as.integer(table(model6a_covid$target_season))), collapse = "; ")`. Predicted incidence ranged from `r round(min(model6a_covid$prediction, na.rm = TRUE), 3)` to `r round(max(model6a_covid$prediction, na.rm = TRUE), 3)` per 100,000 population, with a mean of `r round(mean(model6a_covid$prediction, na.rm = TRUE), 3)`. This sensitivity model extends Model 4 by including a COVID-season indicator to assess whether accounting for the COVID seasons affects predictive performance.
 
-pred_model5 <- run_expanding_model(
-  data = forecast_data,
-  model_type = "GBM",
-  model_name = "Gradient Boosting"
-)
+The model Model 6b generated `r nrow(model6b_post2020)` forecasts across `r dplyr::n_distinct(model6b_post2020$target_season)` test seasons. The number of forecasts by season was `r paste(paste0(names(table(model6b_post2020$target_season)), ": ", as.integer(table(model6b_post2020$target_season))), collapse = "; ")`. Predicted incidence ranged from `r round(min(model6b_post2020$prediction, na.rm = TRUE), 3)` to `r round(max(model6b_post2020$prediction, na.rm = TRUE), 3)` per 100,000 population, with a mean of `r round(mean(model6b_post2020$prediction, na.rm = TRUE), 3)`. This sensitivity model extends Model 4 by including a post-2020 indicator to assess whether accounting for the period from the 2022/23 season onward affects predictive performance.
+
+**Negative Binomial Model Diagnostics**
+
+```{r checking_before_diagnose}
+# Check the target week in Model 3 predictions
+pred_model3 |>
+  dplyr::filter(target_week == "2023-W40") |>
+  dplyr::select(target_week, dplyr::everything()) |>
+  print()
+
+# Check matching rows in forecast_data
+sum(forecast_data$target_week == "2023-W40", na.rm = TRUE)
+
+# Inspect the target_week format in both objects
+head(pred_model3$target_week, 10)
+head(forecast_data$target_week, 10)
+
+# Check for duplicate target weeks in forecast_data
+forecast_data |>
+  dplyr::filter(target_week == "2023-W40") |>
+  dplyr::select(target_week, week_start, target_week_start) |>
+  print()
 ```
+
+```{r model_diagnose}
+# =============================================================================
+# Diagnose convergence of selected NB GLMs across forecast origins
+# =============================================================================
+
+diagnose_nb_convergence <- function(predictions, model_label,
+                                    indicator = NULL) {
+
+  diagnostic_results <- vector("list", nrow(predictions))
+
+  for (i in seq_len(nrow(predictions))) {
+
+target_week_i <- predictions$target_week[i]
+
+target_week_start_i <- predictions$target_week_start[i]
+
+new_data <- forecast_data |>
+  dplyr::filter(
+    target_week_start == target_week_start_i
+  )
+
+if (nrow(new_data) != 1) {
+  stop(
+    "Expected exactly one row for target week: ",
+    target_week_i,
+    "; found ",
+    nrow(new_data)
+  )
+}
+
+origin_date <- as.Date(new_data$week_start[1])
+
+    # Use the same conservative cutoff as the forecasting models.
+    train_data <- forecast_data |>
+      dplyr::filter(
+        !is.na(target_week_start),
+        target_week_start <= origin_date - 7,
+        !is.na(target_oblig_cases),
+        is.finite(target_oblig_cases),
+        target_oblig_cases >= 0,
+        !is.na(target_oblig_inc_100k),
+        is.finite(target_oblig_inc_100k),
+        !is.na(target_population),
+        is.finite(target_population),
+        target_population > 0,
+        dplyr::if_all(
+          dplyr::all_of(common_predictors),
+          ~ !is.na(.x) & is.finite(.x)
+        )
+      )
+
+    if (!is.null(indicator)) {
+      train_data <- train_data |>
+        dplyr::filter(!is.na(.data[[indicator]]))
+    }
+
+    # Reconstruct the selected predictor set recorded by each model.
+    predictors <- c(
+      ar_candidates[[as.character(predictions$selected_AR[i])]],
+      fourier_candidates[[as.character(predictions$selected_Fourier[i])]]
+    )
+
+    selected_sent <- predictions$selected_Sentinella[i]
+
+    if (!is.null(selected_sent) &&
+        !is.na(selected_sent) &&
+        nzchar(as.character(selected_sent))) {
+      predictors <- c(predictors, as.character(selected_sent))
+    }
+
+    if (!is.null(indicator)) {
+      predictors <- c(predictors, indicator)
+    }
+
+    model_formula <- stats::as.formula(
+      paste(
+        "target_oblig_cases ~",
+        paste(predictors, collapse = " + "),
+        "+ offset(log(target_population))"
+      )
+    )
+
+    fit_warnings <- character()
+    fit_error <- NA_character_
+
+    # Capture warnings rather than suppressing them.
+    fit <- tryCatch(
+      withCallingHandlers(
+        MASS::glm.nb(
+          formula = model_formula,
+          data = train_data
+        ),
+        warning = function(w) {
+          fit_warnings <<- c(
+            fit_warnings,
+            conditionMessage(w)
+          )
+          invokeRestart("muffleWarning")
+        }
+      ),
+      error = function(e) {
+        fit_error <<- conditionMessage(e)
+        NULL
+      }
+    )
+
+    if (is.null(fit)) {
+
+      diagnostic_results[[i]] <- tibble::tibble(
+        model = model_label,
+        target_week = target_week_i,
+        n_train = nrow(train_data),
+        theta = NA_real_,
+        converged = FALSE,
+        pearson_dispersion = NA_real_,
+        warnings = paste(unique(fit_warnings), collapse = " | "),
+        fit_error = fit_error
+      )
+
+    } else {
+
+      pearson_dispersion <- sum(
+        stats::residuals(fit, type = "pearson")^2
+      ) / stats::df.residual(fit)
+
+      diagnostic_results[[i]] <- tibble::tibble(
+        model = model_label,
+        target_week = target_week_i,
+        n_train = nrow(train_data),
+        theta = fit$theta,
+        converged = isTRUE(fit$converged),
+        pearson_dispersion = pearson_dispersion,
+        warnings = paste(unique(fit_warnings), collapse = " | "),
+        fit_error = fit_error
+      )
+    }
+  }
+
+  dplyr::bind_rows(diagnostic_results)
+}
+
+
+# Run diagnostics on the selected NB specifications.
+nb_diagnostics <- dplyr::bind_rows(
+  diagnose_nb_convergence(pred_model3, "Model 3"),
+  diagnose_nb_convergence(pred_model4, "Model 4"),
+  diagnose_nb_convergence(
+    model6a_covid,
+    "Model 6a",
+    indicator = "target_covid_season"
+  ),
+  diagnose_nb_convergence(
+    model6b_post2020,
+    "Model 6b",
+    indicator = "target_post2020"
+  )
+)
+
+# Summary of convergence and dispersion
+nb_diagnostics |>
+  dplyr::group_by(model) |>
+  dplyr::summarise(
+    n_fits = dplyr::n(),
+    n_not_converged = sum(!converged),
+    n_fits_with_warnings = sum(warnings != ""),
+    n_fit_errors = sum(!is.na(fit_error)),
+    max_theta = max(theta, na.rm = TRUE),
+    median_pearson_dispersion = median(
+      pearson_dispersion,
+      na.rm = TRUE
+    ),
+    .groups = "drop"
+  ) |>
+  print(n = Inf)
+
+# Inspect the warning messages, if any.
+nb_diagnostics |>
+  dplyr::filter(warnings != "" | !is.na(fit_error)) |>
+  dplyr::select(
+    model, target_week, theta, converged,
+    pearson_dispersion, warnings, fit_error
+  ) |>
+  print(n = Inf, width = Inf)
+```
+
+***Negative binomial model convergence diagnostics***
+
+Convergence diagnostics were performed for the selected negative binomial models across the expanding-window evaluation. Across `r dplyr::n_distinct(nb_diagnostics$model)` models, a total of `r nrow(nb_diagnostics)` fits were assessed, with `r min(table(nb_diagnostics$model))` to `r max(table(nb_diagnostics$model))` fits per model. No non-converged fits, recorded fitting warnings, or fitting errors were detected.
+
+The maximum estimated dispersion parameter (\(\theta\)) across the models ranged from `r round(min(nb_diagnostics |> dplyr::group_by(model) |> dplyr::summarise(max_theta = max(theta, na.rm = TRUE), .groups = "drop") |> dplyr::pull(max_theta), na.rm = TRUE), 2)` to `r round(max(nb_diagnostics |> dplyr::group_by(model) |> dplyr::summarise(max_theta = max(theta, na.rm = TRUE), .groups = "drop") |> dplyr::pull(max_theta), na.rm = TRUE), 2)`, while the median Pearson dispersion ratios ranged from `r round(min(nb_diagnostics |> dplyr::group_by(model) |> dplyr::summarise(median_dispersion = median(pearson_dispersion, na.rm = TRUE), .groups = "drop") |> dplyr::pull(median_dispersion), na.rm = TRUE), 3)` to `r round(max(nb_diagnostics |> dplyr::group_by(model) |> dplyr::summarise(median_dispersion = median(pearson_dispersion, na.rm = TRUE), .groups = "drop") |> dplyr::pull(median_dispersion), na.rm = TRUE), 3)`. These results indicate no detected numerical convergence problems in the evaluated model fits. However, they do not establish overall model adequacy or predictive superiority.
 
 # 4 Validate the models
 
-```{r models validation}
-# ============================================================
-# Purpose: 
-# Evaluate all models using rolling-origin forecasts generated with 
-# an expanding training window.
-# ============================================================
+```{r models_validation}
+# =============================================================================
+# Model validation: Check forecast integrity
+# =============================================================================
 
-# Check that each model has at most one prediction per target week
 prediction_list <- list(
-  pred_model1,
-  pred_model2,
-  pred_model3,
-  pred_model4,
-  pred_model5
+  pred_model1 = pred_model1,
+  pred_model2 = pred_model2,
+  pred_model3 = pred_model3,
+  pred_model4 = pred_model4,
+  pred_model5 = pred_model5,
+  model6a_covid = model6a_covid,
+  model6b_post2020 = model6b_post2020
 )
 
+# Check that every model produced forecasts
+if (any(vapply(prediction_list, nrow, integer(1)) == 0)) {
+  stop("At least one model produced no forecasts.")
+}
+
+# Check for missing target weeks
+if (any(vapply(
+  prediction_list,
+  function(x) any(is.na(x$target_week)),
+  logical(1)
+))) {
+  stop("At least one model has missing target weeks.")
+}
+
+# Check for duplicate predictions per target week
 if (any(vapply(
   prediction_list,
   function(x) anyDuplicated(x$target_week) > 0,
@@ -834,20 +1540,22 @@ if (any(vapply(
 ))) {
   stop("At least one model has duplicate predictions for a target week.")
 }
+
+cat("Forecast integrity checks passed for all seven models.\n")
 ```
 
-```{r}
-
-# ============================================================
+```{r forecast_evaluation_metrics}
+# =============================================================================
 # Metrics:
 # - MAE and RMSE
 # - Overall test weeks and in-season weeks
 # - MAE skill score relative to the naive baseline
-# - Evaluation on common target weeks across all five models
-# ============================================================
+# - Evaluation on common target weeks across all seven models
+# =============================================================================
 
-
-# Step 1: Combine predictions from all five models
+# =============================================================================
+# Step 1: Combine predictions from all seven models
+# =============================================================================
 
 validation_data <- pred_model1 |>
   dplyr::select(
@@ -893,6 +1601,24 @@ validation_data <- pred_model1 |>
       ),
     by = "target_week"
   ) |>
+  dplyr::inner_join(
+    model6a_covid |>
+      dplyr::select(
+        target_week,
+        actual_model6a = actual,
+        prediction_model6a = prediction
+      ),
+    by = "target_week"
+  ) |>
+  dplyr::inner_join(
+    model6b_post2020 |>
+      dplyr::select(
+        target_week,
+        actual_model6b = actual,
+        prediction_model6b = prediction
+      ),
+    by = "target_week"
+  ) |>
   dplyr::filter(
     !is.na(actual),
     dplyr::if_all(
@@ -902,6 +1628,21 @@ validation_data <- pred_model1 |>
     is.finite(actual)
   )
 
+
+# Check that common evaluation weeks are available
+if (nrow(validation_data) == 0) {
+  stop(
+    "No common valid target weeks across all seven models. ",
+    "Check forecast coverage and missing predictions."
+  )
+}
+
+cat(
+  "Number of common valid target weeks:",
+  nrow(validation_data),
+  "\n"
+)
+
 # Check that actual values are identical across models
 
 actual_columns <- c(
@@ -909,7 +1650,9 @@ actual_columns <- c(
   "actual_model2",
   "actual_model3",
   "actual_model4",
-  "actual_model5"
+  "actual_model5",
+  "actual_model6a",
+  "actual_model6b"
 )
 
 actual_values <- as.matrix(
@@ -931,7 +1674,9 @@ validation_data <- validation_data |>
     -actual_model2,
     -actual_model3,
     -actual_model4,
-    -actual_model5
+    -actual_model5,
+    -actual_model6a,
+    -actual_model6b
   )
 
 # Check common evaluation weeks per season
@@ -939,8 +1684,9 @@ validation_data |>
   dplyr::count(target_season, name = "n_common_weeks") |>
   print(n = Inf)
 
-
+# =============================================================================
 # Step 2: Reshape predictions into long format
+# =============================================================================
 
 validation_long <- validation_data |>
   tidyr::pivot_longer(
@@ -955,14 +1701,17 @@ validation_long <- validation_data |>
       prediction_model2 = "Model 2: Seasonal naive",
       prediction_model3 = "Model 3: NB Oblig-only",
       prediction_model4 = "Model 4: NB Oblig + Sentinella",
-      prediction_model5 = "Model 5: Gradient Boosting"
+      prediction_model5 = "Model 5: Gradient Boosting",
+      prediction_model6a = "Model 6a: NB + COVID indicator",
+      prediction_model6b = "Model 6b: NB + post-2020 indicator"
     ),
     abs_error = abs(actual - prediction),
     squared_error = (actual - prediction)^2
   )
 
-
+# =============================================================================
 # Step 3: Define overall and in-season evaluation groups
+# =============================================================================
 
 validation_groups <- dplyr::bind_rows(
   validation_long |>
@@ -973,8 +1722,9 @@ validation_groups <- dplyr::bind_rows(
     dplyr::mutate(evaluation = "In-season")
 )
 
-
+# =============================================================================
 # Step 4: Calculate overall and in-season metrics
+# =============================================================================
 
 validation_metrics <- validation_groups |>
   dplyr::group_by(evaluation, model) |>
@@ -995,8 +1745,9 @@ validation_metrics <- validation_groups |>
 validation_metrics |>
   print(n = Inf, width = Inf)
 
-
+# =============================================================================
 # Step 5: Calculate metrics separately for each test season
+# =============================================================================
 
 validation_metrics_by_season <- validation_groups |>
   dplyr::group_by(evaluation, target_season, model) |>
@@ -1016,126 +1767,54 @@ validation_metrics_by_season <- validation_groups |>
 
 validation_metrics_by_season |>
   print(n = Inf, width = Inf)
-
 ```
 
-```{r Diebold-Mariano test}
+***Interpretation of Model Validation***
 
-# Step 6: Diebold-Mariano test for Model 3 vs Model 4
-# H2: Does adding Sentinella improve out-of-sample MAE?
+All seven models were evaluated on `r max(validation_metrics$n[validation_metrics$evaluation == "All weeks"])` common valid target weeks across the three test seasons: `r paste(paste0(validation_metrics_by_season$target_season[validation_metrics_by_season$evaluation == "All weeks" & !duplicated(validation_metrics_by_season$target_season)], " (", validation_metrics_by_season$n[validation_metrics_by_season$evaluation == "All weeks" & !duplicated(validation_metrics_by_season$target_season)], " weeks)"), collapse = ", ")`. The evaluation dataset contained no missing or non-finite actual outcomes or predictions.
 
-# Use the same test weeks and paired forecasts
-dm_data <- validation_data |>
-  dplyr::select(
-    target_week,
-    actual,
-    prediction_model3,
-    prediction_model4
-  ) |>
-  dplyr::filter(
-    is.finite(actual),
-    is.finite(prediction_model3),
-    is.finite(prediction_model4)
-  ) |>
-  dplyr::arrange(target_week)
+**Overall performance.** Across all weeks, `r validation_metrics$model[validation_metrics$evaluation == "All weeks"][which.min(validation_metrics$MAE[validation_metrics$evaluation == "All weeks"])]` achieved the lowest MAE (`r round(min(validation_metrics$MAE[validation_metrics$evaluation == "All weeks"]), 2)` per 100,000 population), compared with `r round(validation_metrics$MAE[validation_metrics$evaluation == "All weeks" & validation_metrics$model == "Model 1: Naive"], 2)` for the naive baseline. The MAE skill of the model with the lowest MAE was `r round(validation_metrics$MAE_skill[validation_metrics$evaluation == "All weeks"][which.min(validation_metrics$MAE[validation_metrics$evaluation == "All weeks"])], 3)` relative to the naive baseline. However, the naive baseline achieved a slightly lower overall RMSE (`r round(validation_metrics$RMSE[validation_metrics$evaluation == "All weeks" & validation_metrics$model == "Model 1: Naive"], 2)`) than Gradient Boosting (`r round(validation_metrics$RMSE[validation_metrics$evaluation == "All weeks" & validation_metrics$model == "Model 5: Gradient Boosting"], 2)`), indicating that the relative ranking depends on the evaluation metric.
 
-# Confirm one observation per test week
-stopifnot(!anyDuplicated(dm_data$target_week))
+**In-season performance.** During in-season weeks, `r validation_metrics$model[validation_metrics$evaluation == "In-season"][which.min(validation_metrics$MAE[validation_metrics$evaluation == "In-season"])]` achieved the lowest MAE (`r round(min(validation_metrics$MAE[validation_metrics$evaluation == "In-season"]), 2)` per 100,000 population). Gradient Boosting had an MAE of `r round(validation_metrics$MAE[validation_metrics$evaluation == "In-season" & validation_metrics$model == "Model 5: Gradient Boosting"], 2)`, compared with `r round(validation_metrics$MAE[validation_metrics$evaluation == "In-season" & validation_metrics$model == "Model 1: Naive"], 2)` for the naive baseline. The naive baseline achieved an in-season RMSE of `r round(validation_metrics$RMSE[validation_metrics$evaluation == "In-season" & validation_metrics$model == "Model 1: Naive"], 2)`, compared with `r round(validation_metrics$RMSE[validation_metrics$evaluation == "In-season" & validation_metrics$model == "Model 5: Gradient Boosting"], 2)` for Gradient Boosting.
 
-# Calculate forecast errors
-error_m3 <- dm_data$actual - dm_data$prediction_model3
-error_m4 <- dm_data$actual - dm_data$prediction_model4
-
-# Diebold-Mariano test using absolute-error loss (power = 1)
-dm_result <- forecast::dm.test(
-  e1 = error_m3,
-  e2 = error_m4,
-  alternative = "two.sided",
-  h = 1,
-  power = 1,
-  varestimator = "acf"
-)
-
-# Display test results
-cat("Diebold-Mariano test: Model 3 vs Model 4\n")
-cat("Number of paired forecasts:", nrow(dm_data), "\n")
-cat("Model 3 MAE:", mean(abs(error_m3)), "\n")
-cat("Model 4 MAE:", mean(abs(error_m4)), "\n")
-cat(
-  "Relative MAE reduction (%):",
-  100 * (mean(abs(error_m3)) - mean(abs(error_m4))) /
-    mean(abs(error_m3)),
-  "\n"
-)
-print(dm_result)
-
-```
-
-## Interpretation of Model Validation
-
-The five forecasting models were evaluated using expanding-window, rolling-origin validation on 154 common target weeks across three test seasons (2023/24–2025/26). Model performance was assessed using MAE and RMSE for all test weeks and for influenza-season weeks.
-
-**Overall model performance.** Gradient Boosting (Model 5) achieved the best overall performance, with an MAE of 1.13 and an RMSE of 2.39. Its MAE was approximately 14% lower than that of the naive baseline (Model 1; MAE = 1.31). Model 5 also achieved the lowest in-season MAE (3.58, compared with 4.06 for Model 1) and the lowest overall MAE in each of the three test seasons. However, the in-season evaluation included only 10–14 weeks per season.
-
-**Incremental value of Sentinella.** The negative binomial model incorporating both Oblig and Sentinella data (Model 4) achieved a slightly lower overall MAE than the Oblig-only model (Model 3). However, the improvement was modest, and its consistency across test seasons varied. The statistical significance and the extent of this improvement are examined separately in the evaluation of H2.
-
-**Comparison with the other benchmarks.** Neither Model 3 nor Model 4 outperformed the naive baseline (Model 1) in overall MAE. The seasonal naive model (Model 2) had the highest overall MAE (3.17) and RMSE (6.44), indicating that using incidence from approximately the corresponding period of the previous year was less effective than using the most recent available incidence in these test seasons.
-
-Overall, Model 5 was the most accurate of the five evaluated models. These findings describe predictive performance on the selected test weeks and do not guarantee similar performance in future influenza seasons.
-
-## Evaluation of H2
-
-H2 proposed that including lagged Sentinella indicators would reduce out-of-sample MAE by at least 10% compared with a model based only on historical mandatory reporting data, with the difference assessed using the Diebold–Mariano test.
-
-The overall MAE decreased from 1.701 for Model 3 (Oblig only) to 1.597 for Model 4 (Oblig + Sentinella), corresponding to a relative reduction of 6.13%. Although Model 4 achieved a lower overall MAE, the improvement did not reach the pre-specified threshold of 10%.
-
-Performance also varied across the three test seasons. Model 4 performed better than Model 3 in the 2023/24 and 2025/26 seasons, whereas its MAE was slightly higher in 2024/25. This suggests that the predictive contribution of Sentinella indicators was not consistent across seasons.
-
-A two-sided Diebold–Mariano test based on absolute forecast errors from the 154 paired test weeks yielded a test statistic of 1.628 and a p-value of 0.106. The difference in predictive accuracy was not statistically significant at the 5% significance level.
-
-Overall, H2 was not supported: the relative MAE reduction was below the pre-specified 10% threshold, and the Diebold–Mariano test did not provide sufficient evidence of a statistically significant difference in predictive accuracy between Models 3 and 4. Given the limited evaluation period of three test seasons, these findings should be interpreted cautiously.
+Season-specific results should also be considered because performance varied across test seasons. Gradient Boosting achieved the lowest overall MAE in each of the three test seasons, but its in-season advantage was not consistent across seasons. Therefore, the results support Gradient Boosting as a strong candidate based on MAE, but do not establish that it is uniformly superior across all metrics and evaluation periods.
 
 # 5 Plot the results
 
-**Figure 1: Overall MAE Comparison**
+## Figure 1: Overall MAE Comparison
 
-```{r figure-1}
-
-library(tidyverse)
-
+```{r fig_1}
 plot_mae <- validation_metrics |>
-  filter(evaluation == "All weeks") |>
-  mutate(
+  dplyr::filter(evaluation == "All weeks") |>
+  dplyr::mutate(
     model = forcats::fct_reorder(model, MAE)
   ) |>
-  ggplot(aes(x = MAE, y = model)) +
-  geom_col(fill = "#2A78D6", width = 0.65) +
-  geom_text(
-    aes(label = sprintf("%.2f", MAE)),
+  ggplot2::ggplot(ggplot2::aes(x = MAE, y = model)) +
+  ggplot2::geom_col(fill = "#2A78D6", width = 0.65) +
+  ggplot2::geom_text(
+    ggplot2::aes(label = sprintf("%.2f", MAE)),
     hjust = -0.25,
     size = 5
   ) +
-  scale_x_continuous(
-    expand = expansion(mult = c(0, 0.18))
+  ggplot2::scale_x_continuous(
+    expand = ggplot2::expansion(mult = c(0, 0.18))
   ) +
-  labs(
-    title = "Forecast Accuracy Across Five Models",
+  ggplot2::labs(
+    title = "Forecast Accuracy Across Seven Models",
     subtitle = "Lower MAE indicates better predictive performance",
     x = "MAE (incidence per 100,000)",
     y = NULL
   ) +
-  theme_minimal(base_size = 8.5) +
-  theme(
-    plot.title = element_text(face = "bold"),
-    panel.grid.major.y = element_blank()
+  ggplot2::theme_minimal(base_size = 8) +
+  ggplot2::theme(
+    plot.title = ggplot2::element_text(face = "bold"),
+    panel.grid.major.y = ggplot2::element_blank()
   )
 
-# Display the plot in RStudio
 print(plot_mae)
 
-# Save the plot for PowerPoint
-ggsave(
-  "output/mae_comparison.png",
+ggplot2::ggsave(
+  "output/figures/04_fig_1_mae_comparison.png",
   plot = plot_mae,
   width = 8,
   height = 5,
@@ -1144,68 +1823,92 @@ ggsave(
 )
 ```
 
-**Figure 2: MAE by Test Season**
+Across the seven models, `r validation_metrics$model[validation_metrics$evaluation == "All weeks"][which.min(validation_metrics$MAE[validation_metrics$evaluation == "All weeks"])]` achieved the lowest overall MAE of `r round(min(validation_metrics$MAE[validation_metrics$evaluation == "All weeks"], na.rm = TRUE), 2)` per 100,000 population. This was lower than the naive baseline (Model 1), which had an MAE of `r round(validation_metrics$MAE[validation_metrics$evaluation == "All weeks" & validation_metrics$model == "Model 1: Naive"], 2)`. The MAE skill score of the model with the lowest MAE was `r round(validation_metrics$MAE_skill[validation_metrics$evaluation == "All weeks"][which.min(validation_metrics$MAE[validation_metrics$evaluation == "All weeks"])], 3)`, indicating its relative improvement in MAE over the naive baseline.
 
-```{r figure-2}
+However, the naive model achieved a slightly lower RMSE (`r round(validation_metrics$RMSE[validation_metrics$evaluation == "All weeks" & validation_metrics$model == "Model 1: Naive"], 2)`) than Gradient Boosting (`r round(validation_metrics$RMSE[validation_metrics$evaluation == "All weeks" & validation_metrics$model == "Model 5: Gradient Boosting"], 2)`). Thus, Gradient Boosting performed best in terms of average absolute error, but did not minimize every error metric. The negative binomial models had higher overall MAE than the two simple baselines and Gradient Boosting.
+
+## Figure 2: MAE by Test Season
+
+```{r fig_2}
 plot_season_mae <- validation_metrics_by_season |>
-  filter(evaluation == "All weeks") |>
-  ggplot(
-    aes(
+  dplyr::filter(evaluation == "All weeks") |>
+  ggplot2::ggplot(
+    ggplot2::aes(
       x = target_season,
       y = MAE,
       fill = model
     )
   ) +
-  geom_col(
-    position = position_dodge(width = 0.8),
+  ggplot2::geom_col(
+    position = ggplot2::position_dodge(width = 0.8),
     width = 0.7
   ) +
-  labs(
+  ggplot2::labs(
     title = "Forecast Accuracy by Test Season",
+    subtitle = "Comparison across seven models",
     x = "Test season",
     y = "MAE (incidence per 100,000)",
     fill = "Model"
   ) +
-  theme_minimal(base_size = 8) +
-  theme(
-      plot.title = element_text(face = "bold"),
-      legend.position = "bottom",
-      legend.box = "vertical",
-      legend.text = element_text(size = 8),
-      legend.title = element_text(size = 9)
-) +
-guides(
-  fill = guide_legend(nrow = 3, byrow = TRUE)
-)
+  ggplot2::theme_minimal(base_size = 8) +
+  ggplot2::theme(
+    plot.title = ggplot2::element_text(face = "bold"),
+    legend.position = "bottom",
+    legend.box = "vertical",
+    legend.text = ggplot2::element_text(size = 8),
+    legend.title = ggplot2::element_text(size = 9)
+  ) +
+  ggplot2::guides(
+    fill = ggplot2::guide_legend(nrow = 4, byrow = TRUE)
+  )
 
-# Display the plot in RStudio
 print(plot_season_mae)
 
-# Save the figure
 ggplot2::ggsave(
-  "output/mae_by_season.png",
+  "output/figures/04_fig_2_mae_by_season.png",
   plot = plot_season_mae,
-  width = 8,
-  height = 5,
+  width = 9,
+  height = 5.5,
   dpi = 300,
   bg = "white"
 )
 ```
 
-**Figure 3: Actual vs. Predicted**
+Model performance varied across the three test seasons. Gradient Boosting achieved the lowest all-week MAE in `r dplyr::n_distinct(validation_metrics_by_season$target_season[validation_metrics_by_season$evaluation == "All weeks" & validation_metrics_by_season$model == "Model 5: Gradient Boosting" & validation_metrics_by_season$MAE == ave(validation_metrics_by_season$MAE[validation_metrics_by_season$evaluation == "All weeks"], validation_metrics_by_season$target_season[validation_metrics_by_season$evaluation == "All weeks"], FUN = min)])` test seasons out of `r dplyr::n_distinct(validation_metrics_by_season$target_season[validation_metrics_by_season$evaluation == "All weeks"])`. This suggests that its advantage in overall MAE was observed across multiple test seasons.
 
-```{r figure-3}
-# Prepare Figure 3 data from validation_data and validation_long.
+Nevertheless, the relative performance differed when the evaluation was restricted to in-season weeks. The naive baseline achieved a lower in-season MAE than Gradient Boosting in `r sum(validation_metrics_by_season$MAE[validation_metrics_by_season$evaluation == "In-season" & validation_metrics_by_season$model == "Model 1: Naive"] < validation_metrics_by_season$MAE[validation_metrics_by_season$evaluation == "In-season" & validation_metrics_by_season$model == "Model 5: Gradient Boosting"])` of the `r dplyr::n_distinct(validation_metrics_by_season$target_season[validation_metrics_by_season$evaluation == "In-season"])` test seasons. Therefore, although Gradient Boosting performed well in terms of overall MAE, its advantage during periods of influenza activity was not consistent across all seasons. This seasonal variation supports reporting both overall and in-season metrics.
+
+## Figure 3: Actual vs. Predicted Influenza Incidence
+
+```{r fig_3}
+# ---- 1. Define model order --------------------------------------------------
 
 plot_model_levels <- c(
   "Model 1: Naive",
   "Model 2: Seasonal naive",
   "Model 3: NB Oblig-only",
   "Model 4: NB Oblig + Sentinella",
-  "Model 5: Gradient Boosting"
+  "Model 5: Gradient Boosting",
+  "Model 6a: NB + COVID indicator",
+  "Model 6b: NB + post-2020 indicator"
 )
 
-# Create one row per target week before assigning week numbers.
+# Check the actual model labels before plotting.
+available_models <- unique(as.character(validation_long$model))
+
+missing_models <- setdiff(plot_model_levels, available_models)
+
+if (length(missing_models) > 0) {
+  stop(
+    "The following models are missing from validation_long: ",
+    paste(missing_models, collapse = ", "),
+    "\nAvailable models: ",
+    paste(available_models, collapse = ", ")
+  )
+}
+
+# ---- 2. Create a target-week lookup -----------------------------------------
+
 season_week_lookup <- validation_data |>
   dplyr::distinct(target_season, target_week) |>
   dplyr::mutate(
@@ -1214,85 +1917,107 @@ season_week_lookup <- validation_data |>
   ) |>
   dplyr::arrange(target_season, iso_year, iso_week) |>
   dplyr::group_by(target_season) |>
-  dplyr::mutate(week_in_season = dplyr::row_number()) |>
+  dplyr::mutate(
+    week_in_season = dplyr::row_number()
+  ) |>
   dplyr::ungroup() |>
   dplyr::select(
-    target_season, target_week, iso_week, week_in_season
+    target_season,
+    target_week,
+    iso_week,
+    week_in_season
   )
 
-# Prepare actual and predicted values for all five models.
+# ---- 3. Prepare prediction data ---------------------------------------------
+
 Plot_Act.vs.Pre <- validation_long |>
   dplyr::left_join(
     season_week_lookup,
     by = c("target_season", "target_week")
   ) |>
   dplyr::mutate(
-    model = factor(as.character(model), levels = plot_model_levels)
+    model = factor(
+      as.character(model),
+      levels = plot_model_levels
+    )
   ) |>
   dplyr::select(
-    target_week, target_season, actual, prediction,
-    model, iso_week, week_in_season
+    target_week,
+    target_season,
+    actual,
+    prediction,
+    model,
+    iso_week,
+    week_in_season
   )
 
-# One actual observation per target week.
-Actual_Line <- validation_data |>
-  dplyr::distinct(target_season, target_week, actual) |>
-  dplyr::left_join(
-    season_week_lookup,
-    by = c("target_season", "target_week")
-  ) |>
-  dplyr::select(
-    target_season, target_week, week_in_season, actual
-  ) |>
-  dplyr::distinct()
-
-# Repeat actual values across model panels.
+# Actual observations repeated across model panels.
 Actual_Panels <- Plot_Act.vs.Pre |>
   dplyr::distinct(
-    target_season, target_week, week_in_season, actual, model
+    target_season,
+    target_week,
+    week_in_season,
+    actual,
+    model
   )
 
-# Peak-period axis labels.
+# ---- 4. Configure the peak-period x-axis ------------------------------------
+
 brk <- seq(9, 29, by = 2)
-lab <- c("48", "50", "52", "2", "4", "6",
-         "8", "10", "12", "14", "16")
 
-# Report diagnostic information without stopping Knit.
-message("Actual_Line rows: ", nrow(Actual_Line))
-message(
-  "Unique season-week combinations: ",
-  nrow(season_week_lookup)
+lab <- c(
+  "48", "50", "52", "2", "4", "6",
+  "8", "10", "12", "14", "16"
 )
+
+# ---- 5. Print diagnostic information ----------------------------------------
+
+message("Number of models: ",
+        dplyr::n_distinct(Plot_Act.vs.Pre$model))
+
 message("Prediction rows: ", nrow(Plot_Act.vs.Pre))
-message("Validation rows: ", nrow(validation_long))
-message(
-  "Missing week indices: ",
-  sum(is.na(Plot_Act.vs.Pre$week_in_season))
-)
-message(
-  "Missing model labels: ",
-  sum(is.na(Plot_Act.vs.Pre$model))
-)
-```
 
-```{r}
-# ---- 3. Create plot ---------------------------------------------------------
+message("Unique season-week combinations: ",
+        nrow(season_week_lookup))
+
+message("Missing week indices: ",
+        sum(is.na(Plot_Act.vs.Pre$week_in_season)))
+
+message("Missing model labels: ",
+        sum(is.na(Plot_Act.vs.Pre$model)))
+
+# ---- 6. Create the plot -----------------------------------------------------
 
 plot_figure3 <- ggplot2::ggplot() +
   ggplot2::geom_line(
     data = Actual_Panels,
-    ggplot2::aes(x = week_in_season, y = actual, colour = "Actual"),
-    linewidth = 0.4, na.rm = TRUE
+    ggplot2::aes(
+      x = week_in_season,
+      y = actual,
+      colour = "Actual"
+    ),
+    linewidth = 0.4,
+    na.rm = TRUE
   ) +
   ggplot2::geom_line(
     data = Plot_Act.vs.Pre,
-    ggplot2::aes(x = week_in_season, y = prediction, colour = "Prediction"),
-    linewidth = 0.4, na.rm = TRUE
+    ggplot2::aes(
+      x = week_in_season,
+      y = prediction,
+      colour = "Prediction"
+    ),
+    linewidth = 0.4,
+    na.rm = TRUE
   ) +
   ggplot2::geom_point(
     data = Plot_Act.vs.Pre,
-    ggplot2::aes(x = week_in_season, y = prediction, colour = "Prediction"),
-    size = 0.4, na.rm = TRUE
+    ggplot2::aes(
+      x = week_in_season,
+      y = prediction,
+      colour = "Prediction"
+    ),
+    size = 0.4,
+    na.rm = TRUE
   ) +
   ggplot2::facet_grid(
     rows = ggplot2::vars(model),
@@ -1309,9 +2034,14 @@ plot_figure3 <- ggplot2::ggplot() +
     expand = ggplot2::expansion(mult = c(0.04, 0.08))
   ) +
   ggplot2::scale_colour_manual(
-    values = c("Actual" = "#222222", "Prediction" = "#e31a1c")
+    values = c(
+      "Actual" = "#222222",
+      "Prediction" = "#e31a1c"
+    )
   ) +
-  ggplot2::coord_cartesian(xlim = c(9, 29)) +
+  ggplot2::coord_cartesian(
+    xlim = c(9, 29)
+  ) +
   ggplot2::labs(
     title = "Actual vs. Predicted Influenza Incidence",
     subtitle = "Peak period (ISO weeks 48–16)",
@@ -1321,27 +2051,40 @@ plot_figure3 <- ggplot2::ggplot() +
   ) +
   ggplot2::theme_minimal(base_size = 8) +
   ggplot2::theme(
-    plot.title = ggplot2::element_text(face = "bold", size = 10, hjust = 0.5),
-    plot.subtitle = ggplot2::element_text(size = 8, hjust = 0.5),
-    strip.text.x = ggplot2::element_text(face = "bold", size = 8),
+    plot.title = ggplot2::element_text(
+      face = "bold",
+      size = 10,
+      hjust = 0.5
+    ),
+    plot.subtitle = ggplot2::element_text(
+      size = 8,
+      hjust = 0.5
+    ),
+    strip.text.x = ggplot2::element_text(
+      face = "bold",
+      size = 8
+    ),
     strip.text.y.left = ggplot2::element_text(
-      angle = 0, hjust = 1, size = 5,
-      face = "bold", lineheight = 0.85
+      angle = 0,
+      hjust = 1,
+      size = 5,
+      face = "bold",
+      lineheight = 0.85
     ),
     strip.placement = "outside",
     strip.background = ggplot2::element_blank(),
-    axis.title.x = ggplot2::element_text(size = 8),
-    axis.title.y = ggplot2::element_text(size = 8),
-    axis.text.x = ggplot2::element_text(size = 6.5),
-    axis.text.y = ggplot2::element_text(size = 6.5),
+    axis.title.x = ggplot2::element_text(size = 7),
+    axis.title.y = ggplot2::element_text(size = 7),
+    axis.text.x = ggplot2::element_text(size = 6),
+    axis.text.y = ggplot2::element_text(size = 6),
     legend.position = "bottom",
-    legend.text = ggplot2::element_text(size = 7.5),
+    legend.text = ggplot2::element_text(size = 7),
     panel.grid.minor = ggplot2::element_blank(),
     panel.spacing = grid::unit(0.8, "lines"),
     plot.margin = ggplot2::margin(8, 10, 6, 8)
   )
 
-# ---- 4. Display and save ----------------------------------------------------
+# ---- 7. Display and save ----------------------------------------------------
 
 dir.create(
   "output/figures",
@@ -1352,18 +2095,32 @@ dir.create(
 print(plot_figure3)
 
 ggplot2::ggsave(
-  filename = "output/figures/Plot_Act.vs.Pre.png",
+  filename = "output/figures/04_fig_3_Act.vs.Pre.png",
   plot = plot_figure3,
   width = 16,
-  height = 16,
+  height = 20,
   units = "in",
   dpi = 300,
   bg = "white"
 )
 ```
 
-**Conclusion: Model 5 (Gradient Boosting) Performs Best**
+Figure 3 compares actual and predicted influenza incidence during the peak period (ISO weeks 48–16) across the three test seasons.
 
-Overall, Model 5 provided the most accurate forecasts among the five evaluated models. Its performance across the three test seasons and its ability to capture the observed temporal patterns make it the preferred model for forecasting weekly influenza incidence in this analysis.
+The naive baseline (Model 1) generally follows the observed changes in incidence, although its predictions may appear to lag behind rapid changes in influenza activity. Gradient Boosting (Model 5) produces relatively smooth predictions and visually follows the overall patterns shown in the peak-period plots. In contrast, the predictions from Models 3, 4, 6a and 6b show pronounced peaks above the observed incidence in some test seasons, suggesting possible overestimation of peak activity. The seasonal naive model (Model 2) also shows varying agreement with the observed incidence across seasons.
 
-The results suggest that a flexible model combining lagged surveillance indicators with seasonal information can provide useful predictive performance. However, the evaluation covers only three test seasons, so the model's performance should be reassessed as additional surveillance data become available.
+These visual observations can be considered alongside the quantitative evaluation across all common test weeks. Gradient Boosting achieved the lowest overall MAE (`r round(validation_metrics$MAE[validation_metrics$evaluation == "All weeks" & validation_metrics$model == "Model 5: Gradient Boosting"], 2)` per 100,000 population), compared with `r round(validation_metrics$MAE[validation_metrics$evaluation == "All weeks" & validation_metrics$model == "Model 1: Naive"], 2)` for the naive baseline. However, the naive baseline had a slightly lower overall RMSE (`r round(validation_metrics$RMSE[validation_metrics$evaluation == "All weeks" & validation_metrics$model == "Model 1: Naive"], 2)`) than Gradient Boosting (`r round(validation_metrics$RMSE[validation_metrics$evaluation == "All weeks" & validation_metrics$model == "Model 5: Gradient Boosting"], 2)`), indicating that their relative performance depends on the error metric.
+
+Overall, Figure 3 provides a visual comparison of model predictions during the peak period, while the evaluation metrics quantify performance across the full set of common test weeks. Gradient Boosting performed best in terms of overall MAE, but the visual comparison and RMSE results do not establish that it is uniformly superior across all evaluation criteria. Both quantitative metrics and variation across test seasons should therefore be considered when assessing predictive performance.
+
+# 6 Conclusion
+
+This study evaluated seven forecasting models for predicting weekly influenza incidence in Switzerland using an expanding-window evaluation across three test seasons (2023/24, 2024/25 and 2025/26). Model performance was assessed using MAE and RMSE, with additional evaluation during in-season weeks.
+
+Overall, **`r validation_metrics$model[validation_metrics$evaluation == "All weeks"][which.min(validation_metrics$MAE[validation_metrics$evaluation == "All weeks"])]` was the best-performing model in terms of overall MAE**, achieving an MAE of `r round(min(validation_metrics$MAE[validation_metrics$evaluation == "All weeks"], na.rm = TRUE), 2)` per 100,000 population. This was lower than the naive baseline's MAE of `r round(validation_metrics$MAE[validation_metrics$evaluation == "All weeks" & validation_metrics$model == "Model 1: Naive"], 2)`, corresponding to an MAE skill score of `r round(validation_metrics$MAE_skill[validation_metrics$evaluation == "All weeks" & validation_metrics$model == "Model 5: Gradient Boosting"], 3)` relative to the naive baseline. Gradient Boosting also achieved the lowest all-week MAE in `r dplyr::n_distinct(validation_metrics_by_season$target_season[validation_metrics_by_season$evaluation == "All weeks" & validation_metrics_by_season$model == "Model 5: Gradient Boosting"])` of the three test seasons.
+
+However, the naive baseline achieved a slightly lower overall RMSE (`r round(validation_metrics$RMSE[validation_metrics$evaluation == "All weeks" & validation_metrics$model == "Model 1: Naive"], 2)`) than Gradient Boosting (`r round(validation_metrics$RMSE[validation_metrics$evaluation == "All weeks" & validation_metrics$model == "Model 5: Gradient Boosting"], 2)`). During in-season weeks, Gradient Boosting achieved an MAE of `r round(validation_metrics$MAE[validation_metrics$evaluation == "In-season" & validation_metrics$model == "Model 5: Gradient Boosting"], 2)`, compared with `r round(validation_metrics$MAE[validation_metrics$evaluation == "In-season" & validation_metrics$model == "Model 1: Naive"], 2)` for the naive baseline. Its advantage during in-season periods was not consistent across all three test seasons.
+
+The negative binomial models, including those incorporating Sentinella information or COVID-related indicators, did not outperform the naive baseline in overall MAE in this evaluation. Thus, adding these predictors and model components did not translate into improved predictive accuracy under the current modelling and evaluation setup.
+
+In conclusion, Gradient Boosting is the preferred model when the primary selection criterion is overall MAE, while the naive baseline remains a competitive and simpler benchmark, particularly when considering RMSE and season-specific in-season performance. These findings support selecting Gradient Boosting as the leading candidate for further evaluation rather than claiming that it is universally superior. The conclusions are limited to the three evaluated test seasons and the current model specifications.
