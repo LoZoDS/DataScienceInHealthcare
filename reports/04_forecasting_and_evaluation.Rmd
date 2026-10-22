@@ -43,13 +43,15 @@ Model 3 (NB Oblig-only) versus Model 4 (NB Oblig + Sentinella) assesses the incr
 ```{r load}
 source("R/setup.R")
 
+# Load packages
+install_file <- "../install_packages.R"
+
 # Load the national-level data
 national <- load_national()
 
 # Load the in-season classification from WP 4.2
 in_season <- readr::read_csv("output/eda/in_season_weeks.csv",show_col_types = FALSE)
 ```
-
 The processed national dataset contains weekly influenza surveillance data from Oblig and Sentinella.\
 The in-season classification identifies the weeks considered part of the influenza season.
 
