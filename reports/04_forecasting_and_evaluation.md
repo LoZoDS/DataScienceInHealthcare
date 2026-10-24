@@ -1,30 +1,53 @@
 WP 4.4 & 4.5 – Forecasting and evaluation
 ================
 Q. Xu (responsible), H. Wang (feedback)
-22 Oktober 2026
+24 Oktober 2026
 
 - [1 Load data](#1-load-data)
 - [2 Build the forecasting dataset](#2-build-the-forecasting-dataset)
-- [3 Define the forecasting models](#3-define-the-forecasting-models)
-  - [Model 1 — Naive baseline](#model-1--naive-baseline)
-  - [Model 2 — Seasonal naive](#model-2--seasonal-naive)
-  - [Model 3 — Negative Binomial GLM
-    (Oblig-only)](#model-3--negative-binomial-glm-oblig-only)
-  - [Model 4 — Negative Binomial GLM (Oblig +
-    Sentinella)](#model-4--negative-binomial-glm-oblig--sentinella)
-  - [Model 5 — Gradient Boosting](#model-5--gradient-boosting)
-  - [Model 6 — Sensitivity analysis for COVID and post-2020
-    indicators](#model-6--sensitivity-analysis-for-covid-and-post-2020-indicators)
-    - [Model 6a: NB GLM from Model 4 + COVID-season indicator  
-      ](#model-6a-nb-glm-from-model-4--covid-season-indicator-)
-    - [Model 6b: NB GLM from Model 4 + post2020 level-shift indicator  
-      ](#model-6b-nb-glm-from-model-4--post2020-level-shift-indicator-)
-- [4 Validate the models](#4-validate-the-models)
-- [5 Plot the results](#5-plot-the-results)
-  - [Figure 1: Overall MAE Comparison](#figure-1-overall-mae-comparison)
+- [3 Define the forecasting methods and
+  models](#3-define-the-forecasting-methods-and-models)
+  - [3.1 Rolling-origin expanding-window
+    forecasts](#31-rolling-origin-expanding-window-forecasts)
+  - [3.2 Forecasting method 1 — Simple Naive
+    Baseline](#32-forecasting-method-1--simple-naive-baseline)
+  - [3.3 Forecasting method 2 — Seasonal Naive
+    Baseline](#33-forecasting-method-2--seasonal-naive-baseline)
+  - [3.4 Model 1 — Negative Binomial GLM
+    (Oblig-only)](#34-model-1--negative-binomial-glm-oblig-only)
+    - [Interpretation of Model 1
+      Forecasts](#interpretation-of-model-1-forecasts)
+    - [Interpretation of Model 1
+      Coefficients](#interpretation-of-model-1-coefficients)
+  - [3.5 Model 2 — Negative Binomial GLM (Oblig +
+    Sentinella)](#35-model-2--negative-binomial-glm-oblig--sentinella)
+    - [Interpretation of Model 2
+      Forecasts](#interpretation-of-model-2-forecasts)
+    - [Interpretation of Model 2
+      Coefficients](#interpretation-of-model-2-coefficients)
+  - [3.6 Model 3 — Gradient Boosting](#36-model-3--gradient-boosting)
+    - [Interpretation of Model 3
+      Forecasts](#interpretation-of-model-3-forecasts)
+  - [3.7 Model 4 — Sensitivity Analyses (COVID-Season and Post-2020
+    Indicators)](#37-model-4--sensitivity-analyses-covid-season-and-post-2020-indicators)
+    - [Interpretation of Model 4 Sensitivity
+      Analyses](#interpretation-of-model-4-sensitivity-analyses)
+  - [3.8 Negative Binomial Model
+    Diagnostics](#38-negative-binomial-model-diagnostics)
+    - [Interpretation of Diagnostic
+      Results](#interpretation-of-diagnostic-results)
+- [4 Model Validation and Performance
+  Comparison](#4-model-validation-and-performance-comparison)
+  - [Evaluation of Forecasting
+    Performance](#evaluation-of-forecasting-performance)
+- [5 Visualisation of Results](#5-visualisation-of-results)
+  - [Figure 1: MAE Comparison](#figure-1-mae-comparison)
+    - [Interpretation of Figure 1](#interpretation-of-figure-1)
   - [Figure 2: MAE by Test Season](#figure-2-mae-by-test-season)
+    - [Interpretation of Figure 2](#interpretation-of-figure-2)
   - [Figure 3: Actual vs. Predicted Influenza
     Incidence](#figure-3-actual-vs-predicted-influenza-incidence)
+    - [Interpretation of Figure 3](#interpretation-of-figure-3)
 - [6 Conclusion](#6-conclusion)
 
 **Objective**
@@ -51,9 +74,10 @@ machine-learning forecasting approaches.
 
 **Key comparison**
 
-Model 3 (NB Oblig-only) versus Model 4 (NB Oblig + Sentinella) assesses
-the incremental predictive value of Sentinella information under the
-specified model-selection procedure. Models 6a and 6b provide
+Model 1 (Negative Binomial GLM, Oblig-only) and Model 2 (Negative
+Binomial GLM, Oblig + Sentinella) are compared to assess whether
+Sentinella information improves one-week-ahead predictive performance.
+Model 3 uses Gradient Boosting, while Models 4a and 4b provide
 sensitivity analyses by adding COVID-season and post-2020 indicators,
 respectively.
 
@@ -73,80 +97,25 @@ predictors for model selection.
 
 | Component | Candidate rules for the formal model | Rationale |
 |:---|:---|:---|
-| Oblig AR terms | Consecutive lag combinations: 1; 1–2; 1–3; 1–4 weeks | Consistent with the original protocol’s requirement for multiple autoregressive terms |
-| Fourier terms | $K = 1, 2, 3$, i.e., considering 1, 2, or 3 pairs of annual sine/cosine terms | Consistent with the original protocol’s requirements for seasonality modelling and within-window selection |
-| Sentinella lag | The same-week observation at the forecast-origin week is the preferred candidate; the previous week’s observation is a conservative candidate | In WP 4.3, the same-week association was strongest, but the evidence that Sentinella leads Oblig was insufficient |
-| Earlier Sentinella lags | Not included as default candidates in the main models | WP 4.3 showed no stable evidence of a 2–3 week lead |
-| Parameter selection | Selected separately within each expanding training window | Avoids using the test seasons to select the model |
+| Oblig AR terms | Consecutive lag combinations: 1; 1–2; 1–3; 1–4 weeks | Consistent with the original protocol’s requirement for multiple autoregressive terms. |
+| Fourier terms | K = 1, 2, 3, corresponding to 1, 2, or 3 pairs of annual sine/cosine terms | Consistent with the original protocol’s requirements for seasonality modelling and within-window selection. |
+| Sentinella lag | Forecast-origin observation preferred; previous-week observation as a conservative candidate | In WP 4.3, the same-week association was strongest, but evidence that Sentinella leads Oblig was insufficient. |
+| Earlier Sentinella lags | Not included as default candidates in the main models | WP 4.3 showed no stable evidence of a 2–3-week lead. |
+| Parameter selection | Selected separately within each expanding training window | Avoids using the test seasons to select the model. |
 
-    ## # A tibble: 1 × 4
-    ##   missing_target_incidence missing_target_cases missing_target_population
-    ##                      <int>                <int>                     <int>
-    ## 1                        1                    1                         1
-    ## # ℹ 1 more variable: missing_candidate_predictors <int>
+Candidate rules and rationale for the forecasting models
 
-    ## Number of rows: 715
+The forecasting dataset contains 715 weekly observations. Missing target
+outcomes and candidate predictors were retained as missing rather than
+imputed. Observations were excluded from model fitting or evaluation
+when the variables required for the corresponding analysis were
+unavailable.
 
-    ## # A tibble: 6 × 3
-    ##   target_season target_in_season     n
-    ##   <chr>         <lgl>            <int>
-    ## 1 2023/24       FALSE               38
-    ## 2 2023/24       TRUE                14
-    ## 3 2024/25       FALSE               41
-    ## 4 2024/25       TRUE                11
-    ## 5 2025/26       FALSE               40
-    ## 6 2025/26       TRUE                10
-
-The forecasting dataset contains 715 weekly observations. One
-observation lacks the target incidence, target case count, and target
-population, while seven observations have missing candidate predictors.
-Missing values are not imputed; observations are excluded from model
-fitting or evaluation when the required variables are unavailable.
-
-Across the three test seasons, the number of in-season evaluation weeks
-ranged from (2025/26 )10 to (2023/24)14 per season.
+The number of in-season evaluation weeks varied across the three test
+seasons. The evaluation uses the target-week in-season classification
+and the common eligible forecast weeks.
 
 **Target-week indicators and COVID-related data validation**
-
-    ## # A tibble: 1 × 3
-    ##   n_rows missing_covid missing_post2020
-    ##    <int>         <int>            <int>
-    ## 1    715             1                1
-
-    ##  logi [1:715] FALSE FALSE FALSE FALSE FALSE FALSE ...
-
-    ##  logi [1:715] FALSE FALSE FALSE FALSE FALSE FALSE ...
-
-    ## # A tibble: 4 × 3
-    ##   target_covid_season target_post2020     n
-    ##   <lgl>               <lgl>           <int>
-    ## 1 FALSE               FALSE             403
-    ## 2 FALSE               TRUE              206
-    ## 3 TRUE                FALSE             105
-    ## 4 NA                  NA                  1
-
-    ## # A tibble: 1 × 6
-    ##   origin_week target_week origin_week_start target_week_start
-    ##   <chr>       <chr>       <date>            <date>           
-    ## 1 2026-W37    <NA>        2026-09-07        NA               
-    ## # ℹ 2 more variables: target_covid_season <lgl>, target_post2020 <lgl>
-
-    ## # A tibble: 5 × 6
-    ##   origin_week target_week origin_week_start target_week_start
-    ##   <chr>       <chr>       <date>            <date>           
-    ## 1 2026-W33    2026-W34    2026-08-10        2026-08-17       
-    ## 2 2026-W34    2026-W35    2026-08-17        2026-08-24       
-    ## 3 2026-W35    2026-W36    2026-08-24        2026-08-31       
-    ## 4 2026-W36    2026-W37    2026-08-31        2026-09-07       
-    ## 5 2026-W37    <NA>        2026-09-07        NA               
-    ## # ℹ 2 more variables: target_oblig_inc_100k <dbl>, target_oblig_cases <dbl>
-
-    ## # A tibble: 1 × 4
-    ##   rows_without_target_week rows_without_target_date rows_without_target_incide…¹
-    ##                      <int>                    <int>                        <int>
-    ## 1                        1                        1                            1
-    ## # ℹ abbreviated name: ¹​rows_without_target_incidence
-    ## # ℹ 1 more variable: rows_without_target_cases <int>
 
 The COVID-related indicators were successfully mapped to the target
 weeks. Among the 714 observations with valid target-week indicators, 403
@@ -157,75 +126,85 @@ The final row has no target week or target outcome because the dataset
 ends at the latest observed origin week. This is expected for
 one-week-ahead forecasting and does not indicate a data-joining error.
 
-# 3 Define the forecasting models
+# 3 Define the forecasting methods and models
 
-We compare baseline forecasting methods with statistical and
+We compare two baseline forecasting methods with statistical and
 machine-learning models to assess the predictive value of Oblig
-incidence and the additional information provided by Sentinella. Models
-3 and 4 use negative binomial GLMs with autoregressive terms and Fourier
-terms selected by AIC within each expanding training window. Model 3
-uses Oblig information only, while Model 4 additionally selects a
-Sentinella predictor from the predefined candidates. These models follow
-the candidate-selection procedure described above. Model 5 uses Gradient
-Boosting to allow for more flexible relationships and temporal patterns,
-using the selected lagged predictors and Fourier terms. Models 6a and 6b
-extend Model 4 with COVID-season and post-2020 indicators, respectively,
-as sensitivity analyses.
+incidence and the additional information provided by Sentinella. Model 1
+is a Negative Binomial GLM using Oblig autoregressive predictors, while
+Model 2 additionally selects a Sentinella predictor. For both models,
+the autoregressive lag structure and Fourier terms are selected by AIC
+within each expanding training window. Model 3 uses Gradient Boosting
+with the predictors selected by Model 2 in the same training window.
+Models 4a and 4b extend the combined Negative Binomial GLM with
+COVID-season and post-2020 indicators, respectively, as sensitivity
+analyses.
 
-## Model 1 — Naive baseline
+## 3.1 Rolling-origin expanding-window forecasts
 
-Purpose: Use the most recent available Oblig incidence to forecast next
-week’s incidence.
+**Purpose:** Rolling-origin expanding-window forecasts were generated
+for the predictive models across the three test seasons (2023/24,
+2024/25, and 2025/26). At each forecast origin, the model was fitted
+using historical observations that met the training-data eligibility
+criteria and used to predict Oblig incidence one week ahead. The
+training window expanded as additional observations became eligible. To
+reduce the risk of using outcomes before they could reasonably have been
+observed, the training data were restricted to observations whose target
+week start date was at least seven days before the forecast origin.
 
-| n_forecasts | n_missing_actuals | n_missing_predictions | mean_prediction | min_prediction | max_prediction |
-|---:|---:|---:|---:|---:|---:|
-| 154 | 0 | 0 | 5.177 | 0.055 | 36.452 |
+Forecasts were evaluated on eligible test weeks with a common set of
+observed outcomes and predictors. Performance was assessed using MAE and
+RMSE and compared with the simple naive and seasonal naive baselines.
+Model specifications for the Negative Binomial GLMs were selected
+separately within each training window using AIC.
 
-Model 1: Naive baseline output
+For model fitting, observations were restricted using the cutoff
+condition `target_week_start <= origin_date - 7`, as implemented in the
+forecasting code. This restriction was intended to avoid using outcomes
+from target weeks that may not yet have been available at the forecast
+origin. However, because reports are backfilled and historical data
+vintages are unavailable, actual data availability at each forecast
+origin cannot be verified.
 
-***Interpretation***
+## 3.2 Forecasting method 1 — Simple Naive Baseline
 
-The model generated 154 forecasts, with 0 missing actual values and 0
-missing predictions. Predicted incidence ranged from 0.055 to 36.452 per
-100,000 population, with a mean of 5.177. This naive baseline assumes
-that next week’s incidence will equal the observed Oblig incidence in
-the forecast-origin week.
+Purpose: Use the most recently observed Oblig incidence at the forecast
+origin as the prediction for the following week. This persistence
+baseline requires no model fitting.
 
-## Model 2 — Seasonal naive
+![](figures/04_forecasting%20method_1-1.png)<!-- -->
 
-Purpose: Use the incidence from the corresponding week in the previous
-season as a seasonal benchmark.
+The naive forecast closely tracks the observed Oblig incidence in all
+three test seasons (2023/24, 2024/25, 2025/26). Because it simply
+carries forward the most recently observed value, it follows the overall
+seasonal trajectory but lags the observed series by about one week. This
+lag is most visible around the epidemic peak and on the rising and
+falling limbs, where the forecast underestimates during the rise and
+overestimates during the decline. Outside the influenza season,
+incidence is near zero and the forecast matches the observed values
+almost exactly.
 
-| n_forecasts | n_missing_actuals | n_missing_predictions | mean_prediction | min_prediction | max_prediction |
-|---:|---:|---:|---:|---:|---:|
-| 154 | 0 | 0 | 5.233 | 0.045 | 42.812 |
+## 3.3 Forecasting method 2 — Seasonal Naive Baseline
 
-Model 2: Seasonal naive output
+Purpose: Use the Oblig incidence observed 52 weeks before the target
+week as the forecast for the following week. This method provides a
+seasonal baseline for assessing whether more complex forecasting
+approaches improve predictive performance.
 
-***Interpretation***
+![](figures/04_forecasting%20method_2-1.png)<!-- -->
 
-The model generated 154 forecasts, with 0 missing actual values and 0
-missing predictions. Predicted incidence ranged from 0.045 to 42.812 per
-100,000 population, with a mean of 5.233. This seasonal naive baseline
-uses the observed incidence from 364 days before the target week as the
-prediction for the target week.
+The seasonal naive forecast, based on incidence 52 weeks earlier,
+captures the general timing of the seasonal wave but agrees with the
+observed data less consistently. In 2023/24, it substantially
+overestimates the peak and places it earlier than observed. In 2024/25,
+it underestimates the peak magnitude. In 2025/26, the predicted peak
+occurs later than the observed one. These discrepancies reflect
+season-to-season variation in the timing and intensity of influenza
+activity, which a forecast based on the previous year cannot anticipate.
 
-**Rolling-origin expanding-window forecasts**
+## 3.4 Model 1 — Negative Binomial GLM (Oblig-only)
 
-Purpose: Rolling-origin expanding-window forecasts were generated for
-seven models across the three test seasons (2023/24, 2024/25 and
-2025/26). At each forecast origin, models were fitted using the
-available historical data and used to predict influenza incidence one
-week ahead. The training window expanded as new observations became
-available, while the training cutoff ensured that the target outcome was
-not used before it could reasonably be observed.
-
-The resulting forecasts were subsequently aligned on common target weeks
-and evaluated using MAE and RMSE.
-
-## Model 3 — Negative Binomial GLM (Oblig-only)
-
-The model predicts Oblig incidence for the target week using reported
+Model 1 predicts Oblig incidence for the target week using reported
 Oblig cases. The response variable is `target_oblig_cases`, and a
 population offset is included to account for population size. Predicted
 case counts are converted to incidence per 100,000 population. At each
@@ -233,531 +212,447 @@ forecast origin, AIC is used to select the autoregressive lag structure
 (AR1–AR4) and the number of Fourier terms (K1–K3) from the candidate
 specifications, using only the training data available at that origin.
 
-    ## # A tibble: 154 × 9
-    ##    origin_week target_week target_season actual prediction n_train selected_AR
-    ##    <chr>       <chr>       <chr>          <dbl>      <dbl>   <int> <chr>      
-    ##  1 2023-W39    2023-W40    2023/24        0.178     0.0462     553 AR4        
-    ##  2 2023-W40    2023-W41    2023/24        0.167     0.0574     554 AR4        
-    ##  3 2023-W41    2023-W42    2023/24        0.268     0.0644     555 AR4        
-    ##  4 2023-W42    2023-W43    2023/24        0.268     0.101      556 AR4        
-    ##  5 2023-W43    2023-W44    2023/24        0.435     0.120      557 AR4        
-    ##  6 2023-W44    2023-W45    2023/24        0.658     0.212      558 AR4        
-    ##  7 2023-W45    2023-W46    2023/24        0.748     0.376      559 AR4        
-    ##  8 2023-W46    2023-W47    2023/24        0.904     0.438      560 AR4        
-    ##  9 2023-W47    2023-W48    2023/24        1.70      0.674      561 AR4        
-    ## 10 2023-W48    2023-W49    2023/24        3.53      2.10       562 AR4        
-    ##    selected_Fourier selected_AIC
-    ##    <chr>                   <dbl>
-    ##  1 K3                      4471.
-    ##  2 K3                      4480.
-    ##  3 K3                      4490.
-    ##  4 K3                      4499.
-    ##  5 K3                      4511.
-    ##  6 K3                      4520.
-    ##  7 K3                      4532.
-    ##  8 K3                      4544.
-    ##  9 K3                      4555.
-    ## 10 K3                      4566.
-    ## # ℹ 144 more rows
+### Interpretation of Model 1 Forecasts
 
-    ## # A tibble: 1 × 7
-    ##   n_forecasts n_missing_actuals n_missing_predictions n_non_finite_predictions
-    ##         <int>             <int>                 <int>                    <int>
-    ## 1         154                 0                     0                        0
-    ## # ℹ 3 more variables: mean_prediction <dbl>, min_prediction <dbl>,
-    ## #   max_prediction <dbl>
+Model 1 generated 154 one-week-ahead forecasts, with 0 missing actual
+values, 0 missing predictions, and 0 non-finite predictions.
 
-Note: The coefficient estimates, AIC, and theta reported below are from
-the illustrative fit at the first test forecast origin. The final
-forecasting evaluation is based on the rolling-origin expanding-window
-procedure, in which the model is re-selected and refitted at each
-forecast origin.
+At each forecast origin, AIC was used to select the auto-egressive lag
+structure and the number of Fourier terms using the eligible training
+data. The selected model structures were recorded for diagnostic and
+reproducibility purposes.
 
-***Interpretation***
+Note: The coefficient estimates, p-values, AIC, and theta reported below
+refer to the illustrative fit at the first test forecast origin.
+Forecasting performance is evaluated separately using the rolling-origin
+expanding-window procedure, with the model re-selected and refitted at
+each forecast origin.
 
-The model generated 154 forecasts, with 0 missing actual values, 0
-missing predictions, and 0 non-finite predictions. Predicted incidence
-ranged from 0.044 to 168.025 per 100,000 population, with a mean of
-14.045. At each forecast origin, AIC was used to select the
-autoregressive lag structure and Fourier terms from the candidate
-specifications, using the available training data.
+    ##              term coefficient standard_error test_statistic   p_value       IRR
+    ##       (Intercept)   -13.73000        0.05686      -241.5000 0.000e+00 1.087e-06
+    ##  oblig_log_origin     2.79900        0.29010         9.6480 5.015e-22 1.642e+01
+    ##   oblig_log_prev1    -1.30400        0.53220        -2.4490 1.431e-02 2.716e-01
+    ##   oblig_log_prev2    -0.21120        0.53240        -0.3966 6.916e-01 8.096e-01
+    ##   oblig_log_prev3     0.49330        0.28980         1.7020 8.873e-02 1.638e+00
+    ##              sin1     0.69230        0.06817        10.1500 3.150e-24 1.998e+00
+    ##              cos1    -0.29020        0.07336        -3.9550 7.639e-05 7.481e-01
+    ##              sin2     0.06485        0.05862         1.1060 2.686e-01 1.067e+00
+    ##              cos2    -0.07952        0.06003        -1.3250 1.853e-01 9.236e-01
+    ##              sin3    -0.13530        0.05196        -2.6050 9.188e-03 8.734e-01
+    ##              cos3    -0.20820        0.05230        -3.9810 6.853e-05 8.120e-01
+    ##  IRR_lower_95 IRR_upper_95
+    ##     9.726e-07    1.215e-06
+    ##     9.301e+00    2.900e+01
+    ##     9.568e-02    7.707e-01
+    ##     2.851e-01    2.299e+00
+    ##     9.280e-01    2.890e+00
+    ##     1.748e+00    2.284e+00
+    ##     6.480e-01    8.638e-01
+    ##     9.512e-01    1.197e+00
+    ##     8.210e-01    1.039e+00
+    ##     7.889e-01    9.670e-01
+    ##     7.329e-01    8.997e-01
 
-## Model 4 — Negative Binomial GLM (Oblig + Sentinella)
+### Interpretation of Model 1 Coefficients
 
-This model uses the same candidate autoregressive lag structures and
-Fourier terms as Model 3, while additionally selecting between
+Model 1 uses a Negative Binomial GLM with a log link. Exponentiated
+coefficients are interpreted as incidence rate ratios (IRRs),
+conditional on the other predictors. The estimated coefficient for the
+specified Oblig predictor and its statistical significance should be
+interpreted in the context of the illustrative fit. The lagged incidence
+terms may be correlated, while the Fourier terms collectively represent
+seasonal patterns.
+
+These coefficients describe conditional associations, not forecasting
+accuracy. Predictive performance is assessed separately using
+rolling-origin MAE and RMSE.
+
+## 3.5 Model 2 — Negative Binomial GLM (Oblig + Sentinella)
+
+Model 2 uses the same candidate autoregressive lag structures and
+Fourier terms as Model 1, while additionally selecting between
 `sent_log_origin` and `sent_log_prev1`. Model selection is performed
 separately within each expanding training window using AIC, without
 using information from the future test period.
 
-    ## # A tibble: 154 × 10
-    ##    origin_week target_week target_season actual prediction n_train selected_AR
-    ##    <chr>       <chr>       <chr>          <dbl>      <dbl>   <int> <chr>      
-    ##  1 2023-W39    2023-W40    2023/24        0.178     0.0542     553 AR4        
-    ##  2 2023-W40    2023-W41    2023/24        0.167     0.0796     554 AR4        
-    ##  3 2023-W41    2023-W42    2023/24        0.268     0.101      555 AR4        
-    ##  4 2023-W42    2023-W43    2023/24        0.268     0.157      556 AR4        
-    ##  5 2023-W43    2023-W44    2023/24        0.435     0.195      557 AR4        
-    ##  6 2023-W44    2023-W45    2023/24        0.658     0.292      558 AR4        
-    ##  7 2023-W45    2023-W46    2023/24        0.748     0.606      559 AR4        
-    ##  8 2023-W46    2023-W47    2023/24        0.904     0.692      560 AR4        
-    ##  9 2023-W47    2023-W48    2023/24        1.70      1.07       561 AR4        
-    ## 10 2023-W48    2023-W49    2023/24        3.53      3.09       562 AR4        
-    ##    selected_Fourier selected_Sentinella selected_AIC
-    ##    <chr>            <chr>                      <dbl>
-    ##  1 K3               sent_log_origin            4416.
-    ##  2 K3               sent_log_origin            4424.
-    ##  3 K3               sent_log_origin            4434.
-    ##  4 K3               sent_log_origin            4442.
-    ##  5 K3               sent_log_origin            4451.
-    ##  6 K3               sent_log_origin            4460.
-    ##  7 K3               sent_log_origin            4470.
-    ##  8 K3               sent_log_origin            4481.
-    ##  9 K3               sent_log_origin            4491.
-    ## 10 K3               sent_log_origin            4501.
-    ## # ℹ 144 more rows
+### Interpretation of Model 2 Forecasts
 
-    ## # A tibble: 1 × 7
-    ##   n_forecasts n_missing_actuals n_missing_predictions n_non_finite_predictions
-    ##         <int>             <int>                 <int>                    <int>
-    ## 1         154                 0                     0                        0
-    ## # ℹ 3 more variables: mean_prediction <dbl>, min_prediction <dbl>,
-    ## #   max_prediction <dbl>
+Model 2 generated 154 one-week-ahead forecasts, with no missing actual
+values, missing predictions, or non-finite predictions. At each forecast
+origin, the autoregressive lag structure, number of Fourier terms, and
+inclusion of lagged Sentinella information were selected using AIC
+within the eligible training data. The resulting predictions were used
+to evaluate out-of-sample performance using MAE and RMSE. The selected
+model specifications were recorded for diagnostic and reproducibility
+purposes.
 
-    ## # A tibble: 1 × 4
-    ##   selected_AR selected_Fourier selected_Sentinella n_forecasts
-    ##   <chr>       <chr>            <chr>                     <int>
-    ## 1 AR4         K3               sent_log_origin             154
+**Note:** The coefficient estimates, p-values, AIC, and theta reported
+below refer to an illustrative model fit, rather than a summary of all
+rolling-origin fits. Forecasting performance is evaluated separately
+using the expanding-window rolling-origin procedure, with the model
+re-selected and refitted at each forecast origin.
 
-Note: The coefficient estimates, AIC, and theta reported below are from
-the illustrative fit at the first test forecast origin. The final
-forecasting evaluation is based on the rolling-origin expanding-window
-procedure, in which the model is re-selected and refitted at each
-forecast origin.
+    ##              term coefficient standard_error test_statistic   p_value       IRR
+    ##       (Intercept)   -14.82000        0.11180      -132.5000 0.000e+00 3.671e-07
+    ##  oblig_log_origin     2.59200        0.31430         8.2460 1.636e-16 1.335e+01
+    ##   oblig_log_prev1    -1.52600        0.57850        -2.6380 8.339e-03 2.174e-01
+    ##   oblig_log_prev2    -0.38490        0.58280        -0.6605 5.090e-01 6.805e-01
+    ##   oblig_log_prev3     0.90750        0.31470         2.8840 3.926e-03 2.478e+00
+    ##              sin1     0.68390        0.08278         8.2630 1.426e-16 1.982e+00
+    ##              cos1    -0.32190        0.08376        -3.8430 1.214e-04 7.248e-01
+    ##              sin2     0.09988        0.06608         1.5110 1.307e-01 1.105e+00
+    ##              cos2    -0.22270        0.06659        -3.3450 8.231e-04 8.003e-01
+    ##              sin3    -0.28150        0.05871        -4.7950 1.624e-06 7.546e-01
+    ##              cos3    -0.21000        0.05862        -3.5820 3.410e-04 8.106e-01
+    ##   sent_log_origin     0.55960        0.07145         7.8320 4.797e-15 1.750e+00
+    ##  IRR_lower_95 IRR_upper_95
+    ##     2.948e-07    4.570e-07
+    ##     7.212e+00    2.472e+01
+    ##     6.996e-02    6.756e-01
+    ##     2.171e-01    2.133e+00
+    ##     1.337e+00    4.591e+00
+    ##     1.685e+00    2.331e+00
+    ##     6.150e-01    8.541e-01
+    ##     9.708e-01    1.258e+00
+    ##     7.024e-01    9.119e-01
+    ##     6.726e-01    8.467e-01
+    ##     7.226e-01    9.093e-01
+    ##     1.521e+00    2.013e+00
 
-***Interpretation***
+    ## Illustrative forecast origin: 2023-09-25
 
-The model generated 154 forecasts, with 0 missing actual values, 0
-missing predictions, and 0 non-finite predictions. Predicted incidence
-ranged from 0.048 to 129.679 per 100,000 population, with a mean of
-10.358. At each forecast origin, AIC was used to select the
-autoregressive lag structure, the number of Fourier terms, and the
-Sentinella predictor from the candidate specifications, using only the
-available training data.
+    ## Selected AR structure: AR4
 
-## Model 5 — Gradient Boosting
+    ## Selected Fourier terms: K3
 
-At each forecast origin, the AIC-based selection procedure used in Model
-4 is applied first. The selected predictor set is then used to fit the
-Gradient Boosting model. Unlike Model 4, which models case counts using
-a negative binomial GLM with a population offset, Model 5 directly
-predicts `target_oblig_inc_100k`. This allows the two modelling
-approaches to be compared while keeping predictor selection consistent.
+    ## Selected Sentinella predictor: sent_log_origin
 
-    ## # A tibble: 154 × 10
-    ##    origin_week target_week target_season actual prediction n_train selected_AR
-    ##    <chr>       <chr>       <chr>          <dbl>      <dbl>   <int> <chr>      
-    ##  1 2023-W39    2023-W40    2023/24        0.178      0.126     553 AR4        
-    ##  2 2023-W40    2023-W41    2023/24        0.167      0.126     554 AR4        
-    ##  3 2023-W41    2023-W42    2023/24        0.268      0.125     555 AR4        
-    ##  4 2023-W42    2023-W43    2023/24        0.268      0.166     556 AR4        
-    ##  5 2023-W43    2023-W44    2023/24        0.435      0.249     557 AR4        
-    ##  6 2023-W44    2023-W45    2023/24        0.658      0.322     558 AR4        
-    ##  7 2023-W45    2023-W46    2023/24        0.748      0.541     559 AR4        
-    ##  8 2023-W46    2023-W47    2023/24        0.904      0.721     560 AR4        
-    ##  9 2023-W47    2023-W48    2023/24        1.70       1.08      561 AR4        
-    ## 10 2023-W48    2023-W49    2023/24        3.53       1.87      562 AR4        
-    ##    selected_Fourier selected_Sentinella selected_AIC
-    ##    <chr>            <chr>                      <dbl>
-    ##  1 K3               sent_log_origin            4416.
-    ##  2 K3               sent_log_origin            4424.
-    ##  3 K3               sent_log_origin            4434.
-    ##  4 K3               sent_log_origin            4442.
-    ##  5 K3               sent_log_origin            4451.
-    ##  6 K3               sent_log_origin            4460.
-    ##  7 K3               sent_log_origin            4470.
-    ##  8 K3               sent_log_origin            4481.
-    ##  9 K3               sent_log_origin            4491.
-    ## 10 K3               sent_log_origin            4501.
-    ## # ℹ 144 more rows
+    ## Selected AIC: 4415.794
 
-    ## # A tibble: 1 × 7
-    ##   n_forecasts n_missing_actuals n_missing_predictions n_non_finite_predictions
-    ##         <int>             <int>                 <int>                    <int>
-    ## 1         154                 0                     0                        0
-    ## # ℹ 3 more variables: mean_prediction <dbl>, min_prediction <dbl>,
-    ## #   max_prediction <dbl>
+    ## Theta: 1.310614
 
-***Interpretation***
+    ## Number of training observations: 553
 
-The model generated 154 forecasts, with 0 missing actual values, 0
-missing predictions, and 0 non-finite predictions. Predicted incidence
-ranged from 0.125 to 31.712 per 100,000 population, with a mean of
-4.787. At each forecast origin, the predictor set selected by the
-AIC-based procedure used in Model 4 was used to fit the Gradient
-Boosting model.
+### Interpretation of Model 2 Coefficients
 
-## Model 6 — Sensitivity analysis for COVID and post-2020 indicators
+**Autoregressive predictors and seasonality.** The Oblig predictors
+describe conditional associations with the expected target-week case
+count. The Fourier terms represent recurring seasonal patterns.
 
-### Model 6a: NB GLM from Model 4 + COVID-season indicator 
+**Sentinella predictor.** The estimated Sentinella coefficient and its
+confidence interval describe the conditional association between the
+selected Sentinella predictor and the expected Oblig case count, holding
+the other predictors constant.
 
-### Model 6b: NB GLM from Model 4 + post2020 level-shift indicator 
+**Predictive interpretation.** Whether Sentinella improves forecasting
+performance cannot be determined from its coefficient or p-value alone.
+This is assessed by comparing Model 2 with Model 1 on common
+rolling-origin test weeks using MAE and RMSE.
 
-    ## Model 6a rows: 154
+## 3.6 Model 3 — Gradient Boosting
 
-    ## Model 6b rows: 154
+At each forecast origin, the AIC-based predictor selection procedure
+used in Model 2 is applied first. The selected predictor set is then
+used to fit the Gradient Boosting model. Unlike Model 2, which models
+case counts using a Negative Binomial GLM with a population offset,
+Model 3 directly predicts `target_oblig_inc_100k`. This allows the
+predictive performance of the two modelling approaches to be compared
+using the same rolling-origin evaluation framework and consistently
+selected predictors.
 
-    ## # A tibble: 3 × 2
-    ##   target_season     n
-    ##   <chr>         <int>
-    ## 1 2023/24          52
-    ## 2 2024/25          52
-    ## 3 2025/26          50
+### Interpretation of Model 3 Forecasts
 
-    ## # A tibble: 3 × 2
-    ##   target_season     n
-    ##   <chr>         <int>
-    ## 1 2023/24          52
-    ## 2 2024/25          52
-    ## 3 2025/26          50
+Model 3 generated 154 one-week-ahead forecasts, with 0 missing actual
+values, 0 missing predictions, and 0 non-finite predictions.
 
-    ##      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
-    ##   0.05236   0.09487   0.25910  10.96192   4.28872 136.51931
+Among the finite predictions, predicted influenza incidence ranged from
+0.125 to 31.712 per 100,000 population, with a mean of 4.787.
 
-    ##      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
-    ##   0.07515   0.12930   0.39849  14.62018   7.11373 152.03322
+At each forecast origin, the AIC-based predictor-selection procedure
+used in Model 2 selected the autoregressive lag structure, the number of
+Fourier terms, and the Sentinella predictor. The selected predictors
+were then used to fit the Gradient Boosting model, which directly
+predicts incidence per 100,000 population rather than case counts.
 
-***Interpretation***
+Model 3 therefore combines the predictor-selection procedure used in
+Model 2 with a different prediction algorithm. Its forecasting
+performance is evaluated using the same rolling-origin framework and
+compared with Model 1, Model 2, and the naive baselines using MAE and
+RMSE.
 
-The model Model 6a generated 154 forecasts across 3 test seasons. The
-number of forecasts by season was 2023/24: 52; 2024/25: 52; 2025/26: 50.
-Predicted incidence ranged from 0.052 to 136.519 per 100,000 population,
-with a mean of 10.962. This sensitivity model extends Model 4 by
-including a COVID-season indicator to assess whether accounting for the
-COVID seasons affects predictive performance.
+## 3.7 Model 4 — Sensitivity Analyses (COVID-Season and Post-2020 Indicators)
 
-The model Model 6b generated 154 forecasts across 3 test seasons. The
-number of forecasts by season was 2023/24: 52; 2024/25: 52; 2025/26: 50.
-Predicted incidence ranged from 0.075 to 152.033 per 100,000 population,
-with a mean of 14.62. This sensitivity model extends Model 4 by
-including a post-2020 indicator to assess whether accounting for the
-period from the 2022/23 season onward affects predictive performance.
+Model 4 comprises two sensitivity analyses based on Model 2, the
+Negative Binomial GLM using Oblig and Sentinella data. Model 4a adds a
+COVID-season indicator, while Model 4b adds a post-2020 indicator. Both
+models are evaluated using the same expanding-window forecasting
+framework to assess whether accounting for these periods changes
+predictive performance.
 
-**Negative Binomial Model Diagnostics**
+### Interpretation of Model 4 Sensitivity Analyses
 
-    ## # A tibble: 1 × 13
-    ##   target_week model origin_week target_week_start target_season target_in_season
-    ##   <chr>       <chr> <chr>       <date>            <chr>         <lgl>           
-    ## 1 2023-W40    Mode… 2023-W39    2023-10-02        2023/24       FALSE           
-    ## # ℹ 7 more variables: actual <dbl>, prediction <dbl>, n_train <int>,
-    ## #   selected_AR <chr>, selected_Fourier <chr>, selected_Sentinella <chr>,
-    ## #   selected_AIC <dbl>
+**Model 4a: COVID-season indicator.**
 
-    ## [1] 1
+Model 4a generated 154 one-week-ahead forecasts across 3 test seasons.
+The number of forecasts by season was 2023/24: 52; 2024/25: 52; 2025/26:
+50. Predicted incidence ranged from 0.052 to 136.519 per 100,000
+population, with a mean of 10.962. This sensitivity model extends Model
+2, the combined Oblig–Sentinella Negative Binomial GLM, by adding a
+COVID-season indicator. It assesses whether accounting for COVID seasons
+affects one-week-ahead forecasting performance.
 
-    ##  [1] "2023-W40" "2023-W41" "2023-W42" "2023-W43" "2023-W44" "2023-W45"
-    ##  [7] "2023-W46" "2023-W47" "2023-W48" "2023-W49"
+**Model 4b: Post-2020 indicator.**
 
-    ##  [1] "2013-W02" "2013-W03" "2013-W04" "2013-W05" "2013-W06" "2013-W07"
-    ##  [7] "2013-W08" "2013-W09" "2013-W10" "2013-W11"
+Model 4b generated 154 one-week-ahead forecasts across 3 test seasons.
+The number of forecasts by season was 2023/24: 52; 2024/25: 52; 2025/26:
+50. Predicted incidence ranged from 0.075 to 152.033 per 100,000
+population, with a mean of 14.62. This sensitivity model extends Model 2
+by adding a post-2020 indicator, defined for the period from the 2022/23
+season onward, to assess whether accounting for a potential level shift
+affects forecasting performance.
 
-    ## # A tibble: 1 × 3
-    ##   target_week week_start target_week_start
-    ##   <chr>       <date>     <date>           
-    ## 1 2023-W40    2023-09-25 2023-10-02
+**Evaluation.** The two sensitivity models were evaluated across the
+test seasons. Their prediction distributions describe the range and
+central tendency of the forecasts but do not establish predictive
+superiority. Their performance should be compared with Model 2 using MAE
+and RMSE on common eligible target weeks.
 
-    ## # A tibble: 4 × 7
-    ##   model    n_fits n_not_converged n_fits_with_warnings n_fit_errors max_theta
-    ##   <chr>     <int>           <int>                <int>        <int>     <dbl>
-    ## 1 Model 3     154               0                    0            0      1.18
-    ## 2 Model 4     154               0                    0            0      1.47
-    ## 3 Model 6a    154               0                    0            0      1.54
-    ## 4 Model 6b    154               0                    0            0      1.72
-    ## # ℹ 1 more variable: median_pearson_dispersion <dbl>
+## 3.8 Negative Binomial Model Diagnostics
 
-    ## # A tibble: 0 × 7
-    ## # ℹ 7 variables: model <chr>, target_week <chr>, theta <dbl>, converged <lgl>, pearson_dispersion <dbl>, warnings <chr>, fit_error <chr>
+The purpose of the convergence diagnostics was to assess whether the two
+primary Negative Binomial GLMs (Model 1: Oblig-only and Model 2: Oblig +
+Sentinella) could be fitted reliably across the expanding-window
+forecast origins. At each forecast origin, the selected predictor set
+was reconstructed and the corresponding model was refitted using
+eligible training data and the same conservative training cutoff as in
+the forecasting procedure.
 
-***Negative binomial model convergence diagnostics***
+For each fit, convergence status, fitting warnings, fitting errors, the
+estimated dispersion parameter ($\theta$), and Pearson residual
+dispersion were recorded. These diagnostics were used to identify
+potential numerical fitting problems and possible dispersion-related
+concerns. They do not, by themselves, establish overall model adequacy
+or predictive accuracy; forecasting performance was evaluated separately
+using MAE and RMSE.
 
-Convergence diagnostics were performed for the selected negative
-binomial models across the expanding-window evaluation. Across 4 models,
-a total of 616 fits were assessed, with 154 to 154 fits per model. No
-non-converged fits, recorded fitting warnings, or fitting errors were
-detected.
+The diagnostics focused on Models 1 and 2 because they are the two
+primary Negative Binomial GLMs. Model 3 uses Gradient Boosting and is
+therefore not subject to Negative Binomial GLM convergence diagnostics.
+Models 4a and 4b are sensitivity analyses and were outside the scope of
+this primary-model diagnostic check.
 
-The maximum estimated dispersion parameter ($\theta$) across the models
-ranged from 1.18 to 1.72, while the median Pearson dispersion ratios
-ranged from 0.785 to 0.96. These results indicate no detected numerical
-convergence problems in the evaluated model fits. However, they do not
-establish overall model adequacy or predictive superiority.
+| Model | Number of fits | Non-converged | Fits with warnings | Fit errors | Minimum theta | Median theta | Median Pearson dispersion |
+|:---|---:|---:|---:|---:|---:|---:|---:|
+| Model 1: NB Oblig-only | 154 | 0 | 0 | 0 | 1.076 | 1.122 | 0.960 |
+| Model 2: NB Oblig + Sentinella | 154 | 0 | 0 | 0 | 1.307 | 1.390 | 0.785 |
 
-# 4 Validate the models
+Diagnostic summary for negative binomial models
 
-    ## Forecast integrity checks passed for all seven models.
+### Interpretation of Diagnostic Results
 
-    ## Number of common valid target weeks: 154
+**Model fitting diagnostics.** Model 1 (NB Oblig-only) was fitted across
+154 forecast origins, while Model 2 (NB Oblig + Sentinella) was fitted
+across 154 forecast origins.
 
-    ## # A tibble: 3 × 2
-    ##   target_season n_common_weeks
-    ##   <chr>                  <int>
-    ## 1 2023/24                   52
-    ## 2 2024/25                   52
-    ## 3 2025/26                   50
+The median dispersion parameter ($\theta$) was 1.12 for Model 1 and 1.39
+for Model 2. The corresponding median Pearson residual dispersion values
+were 0.960 and 0.785, respectively.
 
-    ## # A tibble: 14 × 7
-    ##    evaluation model                                  n   MAE  RMSE naive_MAE
-    ##    <chr>      <chr>                              <int> <dbl> <dbl>     <dbl>
-    ##  1 All weeks  Model 5: Gradient Boosting           154  1.14  2.51      1.31
-    ##  2 All weeks  Model 1: Naive                       154  1.31  2.48      1.31
-    ##  3 All weeks  Model 2: Seasonal naive              154  3.17  6.44      1.31
-    ##  4 All weeks  Model 4: NB Oblig + Sentinella       154  5.61 16.1       1.31
-    ##  5 All weeks  Model 6a: NB + COVID indicator       154  6.15 17.8       1.31
-    ##  6 All weeks  Model 3: NB Oblig-only               154  9.28 25.1       1.31
-    ##  7 All weeks  Model 6b: NB + post-2020 indicator   154  9.59 24.6       1.31
-    ##  8 In-season  Model 5: Gradient Boosting            35  3.81  5.07      4.06
-    ##  9 In-season  Model 1: Naive                        35  4.06  4.69      4.06
-    ## 10 In-season  Model 2: Seasonal naive               35 10.2  12.5       4.06
-    ## 11 In-season  Model 4: NB Oblig + Sentinella        35 23.2  33.7       4.06
-    ## 12 In-season  Model 6a: NB + COVID indicator        35 25.6  37.1       4.06
-    ## 13 In-season  Model 3: NB Oblig-only                35 38.4  52.4       4.06
-    ## 14 In-season  Model 6b: NB + post-2020 indicator    35 39.5  51.3       4.06
-    ##    MAE_skill
-    ##        <dbl>
-    ##  1    0.131 
-    ##  2    0     
-    ##  3   -1.42  
-    ##  4   -3.28  
-    ##  5   -3.69  
-    ##  6   -6.09  
-    ##  7   -6.33  
-    ##  8    0.0629
-    ##  9    0     
-    ## 10   -1.52  
-    ## 11   -4.70  
-    ## 12   -5.29  
-    ## 13   -8.44  
-    ## 14   -8.72
+These diagnostics summarise model fitting and residual dispersion across
+the evaluated forecast origins. They help identify potential numerical
+fitting issues and dispersion-related concerns but do not, by
+themselves, establish overall model adequacy or predictive accuracy.
+Predictive performance is assessed separately using MAE and RMSE.
 
-    ## # A tibble: 42 × 8
-    ##    evaluation target_season model                                  n   MAE  RMSE
-    ##    <chr>      <chr>         <chr>                              <int> <dbl> <dbl>
-    ##  1 All weeks  2023/24       Model 5: Gradient Boosting            52  1.04  2.11
-    ##  2 All weeks  2023/24       Model 1: Naive                        52  1.09  2.05
-    ##  3 All weeks  2023/24       Model 4: NB Oblig + Sentinella        52  2.92  8.63
-    ##  4 All weeks  2023/24       Model 6a: NB + COVID indicator        52  3.03  9.04
-    ##  5 All weeks  2023/24       Model 2: Seasonal naive               52  3.65  7.89
-    ##  6 All weeks  2023/24       Model 6b: NB + post-2020 indicator    52  6.82 17.6 
-    ##  7 All weeks  2023/24       Model 3: NB Oblig-only                52  6.89 19.7 
-    ##  8 All weeks  2024/25       Model 5: Gradient Boosting            52  1.28  3.13
-    ##  9 All weeks  2024/25       Model 1: Naive                        52  1.38  2.51
-    ## 10 All weeks  2024/25       Model 2: Seasonal naive               52  1.90  3.56
-    ## 11 All weeks  2024/25       Model 4: NB Oblig + Sentinella        52  6.55 16.8 
-    ## 12 All weeks  2024/25       Model 6a: NB + COVID indicator        52  7.45 19.2 
-    ## 13 All weeks  2024/25       Model 3: NB Oblig-only                52 10.4  26.1 
-    ## 14 All weeks  2024/25       Model 6b: NB + post-2020 indicator    52 11.7  28.0 
-    ## 15 All weeks  2025/26       Model 5: Gradient Boosting            50  1.09  2.15
-    ## 16 All weeks  2025/26       Model 1: Naive                        50  1.47  2.84
-    ## 17 All weeks  2025/26       Model 2: Seasonal naive               50  3.99  7.06
-    ## 18 All weeks  2025/26       Model 4: NB Oblig + Sentinella        50  7.41 20.8 
-    ## 19 All weeks  2025/26       Model 6a: NB + COVID indicator        50  8.03 22.5 
-    ## 20 All weeks  2025/26       Model 6b: NB + post-2020 indicator    50 10.2  27.0 
-    ## 21 All weeks  2025/26       Model 3: NB Oblig-only                50 10.6  28.8 
-    ## 22 In-season  2023/24       Model 1: Naive                        14  3.03  3.63
-    ## 23 In-season  2023/24       Model 5: Gradient Boosting            14  3.05  3.91
-    ## 24 In-season  2023/24       Model 4: NB Oblig + Sentinella        14 10.1  16.6 
-    ## 25 In-season  2023/24       Model 6a: NB + COVID indicator        14 10.5  17.4 
-    ## 26 In-season  2023/24       Model 2: Seasonal naive               14 11.6  15.0 
-    ## 27 In-season  2023/24       Model 6b: NB + post-2020 indicator    14 23.8  33.8 
-    ## 28 In-season  2023/24       Model 3: NB Oblig-only                14 24.0  37.8 
-    ## 29 In-season  2024/25       Model 1: Naive                        11  4.18  4.68
-    ## 30 In-season  2024/25       Model 5: Gradient Boosting            11  4.70  6.62
-    ## 31 In-season  2024/25       Model 2: Seasonal naive               11  7.14  7.50
-    ## 32 In-season  2024/25       Model 4: NB Oblig + Sentinella        11 28.6  36.2 
-    ## 33 In-season  2024/25       Model 6a: NB + COVID indicator        11 32.9  41.4 
-    ## 34 In-season  2024/25       Model 3: NB Oblig-only                11 45.3  56.0 
-    ## 35 In-season  2024/25       Model 6b: NB + post-2020 indicator    11 50.9  60.0 
-    ## 36 In-season  2025/26       Model 5: Gradient Boosting            10  3.89  4.50
-    ## 37 In-season  2025/26       Model 1: Naive                        10  5.38  5.88
-    ## 38 In-season  2025/26       Model 2: Seasonal naive               10 11.8  13.0 
-    ## 39 In-season  2025/26       Model 4: NB Oblig + Sentinella        10 35.5  46.4 
-    ## 40 In-season  2025/26       Model 6a: NB + COVID indicator        10 38.6  50.2 
-    ## 41 In-season  2025/26       Model 6b: NB + post-2020 indicator    10 49.0  60.3 
-    ## 42 In-season  2025/26       Model 3: NB Oblig-only                10 50.8  64.4 
-    ##    naive_MAE MAE_skill
-    ##        <dbl>     <dbl>
-    ##  1      1.09   0.0394 
-    ##  2      1.09   0      
-    ##  3      1.09  -1.69   
-    ##  4      1.09  -1.79   
-    ##  5      1.09  -2.37   
-    ##  6      1.09  -5.28   
-    ##  7      1.09  -5.35   
-    ##  8      1.38   0.0734 
-    ##  9      1.38   0      
-    ## 10      1.38  -0.379  
-    ## 11      1.38  -3.75   
-    ## 12      1.38  -4.40   
-    ## 13      1.38  -6.55   
-    ## 14      1.38  -7.51   
-    ## 15      1.47   0.257  
-    ## 16      1.47   0      
-    ## 17      1.47  -1.72   
-    ## 18      1.47  -4.05   
-    ## 19      1.47  -4.46   
-    ## 20      1.47  -5.97   
-    ## 21      1.47  -6.21   
-    ## 22      3.03   0      
-    ## 23      3.03  -0.00689
-    ## 24      3.03  -2.33   
-    ## 25      3.03  -2.48   
-    ## 26      3.03  -2.82   
-    ## 27      3.03  -6.85   
-    ## 28      3.03  -6.92   
-    ## 29      4.18   0      
-    ## 30      4.18  -0.123  
-    ## 31      4.18  -0.707  
-    ## 32      4.18  -5.83   
-    ## 33      4.18  -6.86   
-    ## 34      4.18  -9.83   
-    ## 35      4.18 -11.2    
-    ## 36      5.38   0.277  
-    ## 37      5.38   0      
-    ## 38      5.38  -1.19   
-    ## 39      5.38  -5.60   
-    ## 40      5.38  -6.17   
-    ## 41      5.38  -8.10   
-    ## 42      5.38  -8.45
+# 4 Model Validation and Performance Comparison
 
-***Interpretation of Model Validation***
+Before evaluating predictive performance, forecast integrity was checked
+for both forecasting methods and all five models. The two forecasting
+methods were Method 1 (Naive) and Method 2 (Seasonal Naive). The five
+models comprised Model 1 (Negative Binomial GLM using Oblig data only),
+Model 2 (Negative Binomial GLM using Oblig and Sentinella data), Model 3
+(Gradient Boosting), and two sensitivity models: Model 4a (COVID-season
+indicator) and Model 4b (post-2020 indicator).
 
-All seven models were evaluated on 154 common valid target weeks across
-the three test seasons: 2023/24 (52 weeks), 2024/25 (52 weeks), 2025/26
-(50 weeks). The evaluation dataset contained no missing or non-finite
-actual outcomes or predictions.
+The integrity checks verified that each method and model produced
+forecasts, that target weeks were not missing, and that no duplicate
+predictions were generated for the same target week.
 
-**Overall performance.** Across all weeks, Model 5: Gradient Boosting
-achieved the lowest MAE (1.14 per 100,000 population), compared with
-1.31 for the naive baseline. The MAE skill of the model with the lowest
-MAE was 0.131 relative to the naive baseline. However, the naive
-baseline achieved a slightly lower overall RMSE (2.48) than Gradient
-Boosting (2.51), indicating that the relative ranking depends on the
-evaluation metric.
+Predictive performance was evaluated using mean absolute error (MAE) and
+root mean squared error (RMSE), both overall and during influenza-season
+weeks. The evaluation was restricted to common target weeks with valid
+predictions from both forecasting methods and all five models. The
+distribution of common target weeks across test seasons is reported in
+the corresponding results table. Performance was also examined
+separately for each test season.
 
-**In-season performance.** During in-season weeks, Model 5: Gradient
-Boosting achieved the lowest MAE (3.81 per 100,000 population). Gradient
-Boosting had an MAE of 3.81, compared with 4.06 for the naive baseline.
-The naive baseline achieved an in-season RMSE of 4.69, compared with
-5.07 for Gradient Boosting.
+Method 1 (Naive) served as the reference for calculating the MAE skill
+score. A positive MAE skill score indicates a lower MAE than the Naive
+baseline, whereas a negative score indicates a higher MAE. Method 2
+(Seasonal Naive) provided an additional benchmark based on observations
+from 52 weeks earlier. Both forecasting methods were evaluated alongside
+the five models.
 
-Season-specific results should also be considered because performance
-varied across test seasons. Gradient Boosting achieved the lowest
-overall MAE in each of the three test seasons, but its in-season
-advantage was not consistent across seasons. Therefore, the results
-support Gradient Boosting as a strong candidate based on MAE, but do not
-establish that it is uniformly superior across all metrics and
-evaluation periods.
+The validation and performance evaluation assess forecast integrity and
+predictive accuracy, respectively. They do not, by themselves, establish
+that a model is universally superior or that its underlying assumptions
+are fully satisfied.
 
-# 5 Plot the results
+### Evaluation of Forecasting Performance
 
-## Figure 1: Overall MAE Comparison
+Across the common evaluation weeks, the five research models and two
+baseline methods were compared using MAE and RMSE, both overall and
+during in-season weeks. Lower MAE indicates smaller average absolute
+errors, while RMSE penalises larger errors more strongly. Model rankings
+may differ between these metrics and across test seasons. The results
+therefore describe performance on the evaluated weeks rather than
+guaranteeing future superiority.
+
+# 5 Visualisation of Results
+
+## Figure 1: MAE Comparison
 
 ![](figures/04_fig_1-1.png)<!-- -->
 
-Across the seven models, Model 5: Gradient Boosting achieved the lowest
-overall MAE of 1.14 per 100,000 population. This was lower than the
-naive baseline (Model 1), which had an MAE of 1.31. The MAE skill score
-of the model with the lowest MAE was 0.131, indicating its relative
-improvement in MAE over the naive baseline.
+### Interpretation of Figure 1
 
-However, the naive model achieved a slightly lower RMSE (2.48) than
-Gradient Boosting (2.51). Thus, Gradient Boosting performed best in
-terms of average absolute error, but did not minimize every error
-metric. The negative binomial models had higher overall MAE than the two
-simple baselines and Gradient Boosting.
+Figure 1 compares the mean absolute error (MAE) of the five research
+models with the two baseline methods across the common evaluation weeks.
+Among the research models, the best-performing research model has the
+lowest MAE, followed by the second-best-performing research model.
+Performance is measured in cases per 100,000 population.
+
+The Naive baseline (Method 1) has an MAE that is reported in the
+corresponding results table, while the Seasonal Naive baseline (Method
+2), which uses the observation from 52 weeks earlier, also has its MAE
+reported in that table. Comparing the research models with these
+baselines helps show whether the more complex forecasting approaches
+reduce average absolute prediction errors relative to simple reference
+methods.
+
+The best-performing research model can be compared with Method 1 (Naive)
+using the MAE results reported in the corresponding results table.
+Figure 1 shows MAE only, so the ranking should also be considered
+alongside RMSE, which penalises larger forecast errors more strongly.
 
 ## Figure 2: MAE by Test Season
 
+<div class="kable-table">
+
+| target_season | best_model | best_MAE | naive_MAE | seasonal_naive_MAE |
+|:---|:---|---:|---:|---:|
+| 2023/24 | Model 3: Gradient Boosting | 1.042550 | 1.085283 | 3.651988 |
+| 2024/25 | Model 3: Gradient Boosting | 1.278626 | 1.379898 | 1.902629 |
+| 2025/26 | Model 3: Gradient Boosting | 1.091405 | 1.468804 | 3.989194 |
+
+</div>
+
 ![](figures/04_fig_2-1.png)<!-- -->
 
-Model performance varied across the three test seasons. Gradient
-Boosting achieved the lowest all-week MAE in 3 test seasons out of 3.
-This suggests that its advantage in overall MAE was observed across
-multiple test seasons.
+### Interpretation of Figure 2
 
-Nevertheless, the relative performance differed when the evaluation was
-restricted to in-season weeks. The naive baseline achieved a lower
-in-season MAE than Gradient Boosting in 2 of the 3 test seasons.
-Therefore, although Gradient Boosting performed well in terms of overall
-MAE, its advantage during periods of influenza activity was not
-consistent across all seasons. This seasonal variation supports
-reporting both overall and in-season metrics.
+Figure 2 shows that forecast accuracy varied across the three test
+seasons. Among the research models, **Model 3: Gradient Boosting**
+achieved the lowest MAE in 2023/24 (1.04 per 100,000 population),
+**Model 3: Gradient Boosting** in 2024/25 (1.28), and **Model 3:
+Gradient Boosting** in 2025/26 (1.09).
+
+The Naive and Seasonal Naive methods provide reference benchmarks for
+each season. The results highlight seasonal variation in forecasting
+accuracy.
 
 ## Figure 3: Actual vs. Predicted Influenza Incidence
 
 ![](figures/04_fig_3-1.png)<!-- -->
 
-Figure 3 compares actual and predicted influenza incidence during the
-peak period (ISO weeks 48–16) across the three test seasons.
+### Interpretation of Figure 3
 
-The naive baseline (Model 1) generally follows the observed changes in
-incidence, although its predictions may appear to lag behind rapid
-changes in influenza activity. Gradient Boosting (Model 5) produces
-relatively smooth predictions and visually follows the overall patterns
-shown in the peak-period plots. In contrast, the predictions from Models
-3, 4, 6a and 6b show pronounced peaks above the observed incidence in
-some test seasons, suggesting possible overestimation of peak activity.
-The seasonal naive model (Model 2) also shows varying agreement with the
-observed incidence across seasons.
+Figure 3 compares observed influenza incidence with one-week-ahead
+predictions from the two baseline methods and five research models
+during the peak period (ISO weeks 48–16) across the three test seasons.
 
-These visual observations can be considered alongside the quantitative
-evaluation across all common test weeks. Gradient Boosting achieved the
-lowest overall MAE (1.14 per 100,000 population), compared with 1.31 for
-the naive baseline. However, the naive baseline had a slightly lower
-overall RMSE (2.48) than Gradient Boosting (2.51), indicating that their
-relative performance depends on the error metric.
+The predictions from the Naive baseline (Method 1) reflect the most
+recently observed incidence level, while the Seasonal Naive baseline
+(Method 2) uses observations from 52 weeks earlier to reflect the
+corresponding seasonal pattern from the previous year. The degree of
+agreement between these baseline predictions and the observed incidence
+varies across test seasons.
 
-Overall, Figure 3 provides a visual comparison of model predictions
-during the peak period, while the evaluation metrics quantify
-performance across the full set of common test weeks. Gradient Boosting
-performed best in terms of overall MAE, but the visual comparison and
-RMSE results do not establish that it is uniformly superior across all
-evaluation criteria. Both quantitative metrics and variation across test
-seasons should therefore be considered when assessing predictive
-performance.
+Among the research models, the predicted trajectories differ in how
+closely they follow observed influenza activity and capture changes in
+incidence. Some models may overestimate or underestimate peak intensity
+in particular seasons. However, visual inspection alone cannot establish
+which model performs best quantitatively.
+
+The quantitative evaluation complements this visual comparison. The MAE
+and RMSE results for the five research models and both baseline methods
+are reported in the corresponding evaluation results table. Because RMSE
+penalises larger errors more strongly than MAE, the model with the
+lowest MAE does not necessarily have the lowest RMSE.
+
+Overall, Figure 3 provides a visual assessment of how closely the
+predicted incidence trajectories follow observed influenza activity
+during the peak period. Neither the visual patterns nor a single error
+metric alone establishes that one model is uniformly superior across all
+seasons and evaluation criteria.
 
 # 6 Conclusion
 
-This study evaluated seven forecasting models for predicting weekly
-influenza incidence in Switzerland using an expanding-window evaluation
-across three test seasons (2023/24, 2024/25 and 2025/26). Model
-performance was assessed using MAE and RMSE, with additional evaluation
-during in-season weeks.
+This study evaluated one-week-ahead influenza incidence forecasting in
+Switzerland using an expanding-window rolling-origin approach across
+three test seasons (2023/24–2025/26). Two baseline methods were compared
+with five forecasting models, including two primary Negative Binomial
+GLMs, a Gradient Boosting model, and two sensitivity models
+incorporating COVID-season and post-2020 indicators. Predictive
+performance was assessed using MAE and RMSE across common evaluation
+weeks and during influenza-season weeks.
 
-Overall, **Model 5: Gradient Boosting was the best-performing model in
-terms of overall MAE**, achieving an MAE of 1.14 per 100,000 population.
-This was lower than the naive baseline’s MAE of 1.31, corresponding to
-an MAE skill score of 0.131 relative to the naive baseline. Gradient
-Boosting also achieved the lowest all-week MAE in 3 of the three test
-seasons.
+**Model 3 (Gradient Boosting) was the best-performing model in terms of
+overall MAE.** It achieved an MAE of 1.14 incidence per 100,000
+population, outperforming the Naive baseline (1.31) and the Seasonal
+Naive baseline (3.17). It also achieved the lowest MAE among the
+research models in each of the three test seasons, with values of 1.04,
+1.28, and 1.09 for 2023/24, 2024/25, and 2025/26, respectively. These
+results indicate that Gradient Boosting provided the most accurate
+forecasts in terms of average absolute error among the evaluated
+approaches.
 
-However, the naive baseline achieved a slightly lower overall RMSE
-(2.48) than Gradient Boosting (2.51). During in-season weeks, Gradient
-Boosting achieved an MAE of 3.81, compared with 4.06 for the naive
-baseline. Its advantage during in-season periods was not consistent
-across all three test seasons.
+The comparison between the two primary Negative Binomial GLMs showed
+that Model 2, which incorporated Oblig and Sentinella information,
+achieved a lower overall MAE (5.61) than Model 1, which used Oblig data
+only (9.28). However, Model 2 did not outperform the Naive baseline.
+Thus, although adding Sentinella information was associated with
+improved MAE relative to the Oblig-only GLM in this comparison, the
+results do not demonstrate that it consistently adds sufficient
+predictive value to outperform a simple persistence forecast. The
+sensitivity analyses also did not improve on the combined model: Model
+4a, with a COVID-season indicator, achieved an MAE of 6.15, while Model
+4b, with a post-2020 indicator, achieved an MAE of 9.59.
 
-The negative binomial models, including those incorporating Sentinella
-information or COVID-related indicators, did not outperform the naive
-baseline in overall MAE in this evaluation. Thus, adding these
-predictors and model components did not translate into improved
-predictive accuracy under the current modelling and evaluation setup.
+The visual comparison of observed and predicted incidence provided
+additional insight into model behaviour during influenza peaks. The
+Naive baseline followed recent incidence levels but could lag behind
+rapid changes, while the Seasonal Naive baseline was affected by
+differences in the timing and magnitude of influenza activity between
+seasons. The Negative Binomial models showed deviations from observed
+peak intensity in some periods. Although Gradient Boosting achieved the
+lowest MAE, its smoother predictions may not capture every rapid
+increase or peak accurately. Its overall ranking should therefore be
+interpreted alongside RMSE and in-season performance, since different
+metrics emphasise different aspects of forecast error.
 
-In conclusion, Gradient Boosting is the preferred model when the primary
-selection criterion is overall MAE, while the naive baseline remains a
-competitive and simpler benchmark, particularly when considering RMSE
-and season-specific in-season performance. These findings support
-selecting Gradient Boosting as the leading candidate for further
-evaluation rather than claiming that it is universally superior. The
-conclusions are limited to the three evaluated test seasons and the
-current model specifications.
+The convergence diagnostics for Models 1 and 2 identified no
+non-converged fits, fitting warnings, or fitting errors across the
+evaluated forecast origins. These findings support the numerical
+reliability of the fitted models within the diagnostic procedure, but do
+not establish that the models are universally adequate or accurate.
+
+Overall, **Model 3 (Gradient Boosting) is the preferred model among
+those evaluated when selection is based on MAE**. Nevertheless, the
+findings are limited to the three test seasons and the available
+surveillance data. Historical data backfilling means that the exact
+information available at each original forecast date could not be
+verified. Future work should examine additional seasons, compare
+performance consistently across MAE and RMSE, and investigate whether
+improvements in peak detection can be achieved without sacrificing
+overall forecast accuracy..
