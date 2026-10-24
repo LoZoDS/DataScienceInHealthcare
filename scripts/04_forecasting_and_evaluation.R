@@ -1,5 +1,5 @@
 knitr::opts_knit$set(root.dir = normalizePath(".."))
-knitr::opts_chunk$set(echo = FALSE,  message = FALSE,  warning = FALSE,  
+knitr::opts_chunk$set(echo = FALSE,  message = FALSE,  warning = FALSE,
                       dpi = 150, fig.path = "figures/04_")
 
 source("R/setup.R")
@@ -499,7 +499,7 @@ run_expanding_model <- function(
   # This corresponds to target weeks up to week t - (cutoff_days / 7).
   # The cutoff avoids assuming that the outcome for the forecast-origin
   # week (week t) is already available when the forecast is issued.
-    
+
     train_data <- data |>
       dplyr::filter(
         !is.na(target_week_start),
@@ -774,7 +774,7 @@ ggplot2::ggplot(
     ~target_season,
     scales = "free_x"
   ) +
-  ggplot2::scale_x_date(                      
+  ggplot2::scale_x_date(
     date_breaks = "2 months",
     date_labels = "%b"
   ) +
@@ -855,7 +855,7 @@ ggplot2::ggplot(
     ~target_season,
     scales = "free_x"
   ) +
-  ggplot2::scale_x_date(                      
+  ggplot2::scale_x_date(
     date_breaks = "2 months",
     date_labels = "%b"
   ) +
@@ -1922,7 +1922,7 @@ plot_mae <- validation_metrics |>
   ggplot2::theme_minimal(base_size = 8) +
   ggplot2::theme(
     plot.title = ggplot2::element_text(face = "bold"),
-    axis.text.y = ggplot2::element_text(size = 8.5),  
+    axis.text.y = ggplot2::element_text(size = 8.5),
     legend.text = ggplot2::element_text(size = 9),
     panel.grid.major.y = ggplot2::element_blank(),
     legend.position = "bottom"
