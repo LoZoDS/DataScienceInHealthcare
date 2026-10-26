@@ -1,7 +1,7 @@
 WP 4.4 & 4.5 – Forecasting and evaluation
 ================
 Q. Xu (responsible), H. Wang (feedback)
-24 Oktober 2026
+26 October 2026
 
 - [1 Load data](#1-load-data)
 - [2 Build the forecasting dataset](#2-build-the-forecasting-dataset)
@@ -60,14 +60,16 @@ machine-learning forecasting approaches.
 **Evaluation strategy**
 
 - Expanding-window, rolling-origin evaluation across three test seasons
-  (2023/24–2025/26).  
+  (2023/24–2025/26).\
 
 - Metrics: mean absolute error (MAE) and root mean squared error (RMSE),
-  evaluated across all forecast weeks and during in-season weeks.  
+  evaluated across all forecast weeks and during in-season weeks.\
 
 - MAE skill score relative to the naive baseline:
 
-  $$\text{MAE skill}=1-\frac{\text{MAE}_{\text{model}}}{\text{MAE}_{\text{naive}}}$$
+  $$
+  \text{MAE skill}=1-\frac{\text{MAE}_{\text{model}}}{\text{MAE}_{\text{naive}}}
+  $$
 
   Positive values indicate lower MAE than the naive baseline, zero
   indicates equal MAE, and negative values indicate higher MAE.
@@ -84,7 +86,7 @@ respectively.
 # 1 Load data
 
 The processed national dataset contains weekly influenza surveillance
-data from Oblig and Sentinella.  
+data from Oblig and Sentinella.\
 The in-season classification identifies the weeks considered part of the
 influenza season.
 
@@ -366,7 +368,7 @@ Model 3 generated 154 one-week-ahead forecasts, with 0 missing actual
 values, 0 missing predictions, and 0 non-finite predictions.
 
 Among the finite predictions, predicted influenza incidence ranged from
-0.125 to 31.712 per 100,000 population, with a mean of 4.787.
+0.124 to 31.722 per 100,000 population, with a mean of 4.787.
 
 At each forecast origin, the AIC-based predictor-selection procedure
 used in Model 2 selected the autoregressive lag structure, the number of
@@ -541,9 +543,9 @@ alongside RMSE, which penalises larger forecast errors more strongly.
 
 | target_season | best_model | best_MAE | naive_MAE | seasonal_naive_MAE |
 |:---|:---|---:|---:|---:|
-| 2023/24 | Model 3: Gradient Boosting | 1.042550 | 1.085283 | 3.651988 |
-| 2024/25 | Model 3: Gradient Boosting | 1.278626 | 1.379898 | 1.902629 |
-| 2025/26 | Model 3: Gradient Boosting | 1.091405 | 1.468804 | 3.989194 |
+| 2023/24 | Model 3: Gradient Boosting | 1.042388 | 1.085283 | 3.651988 |
+| 2024/25 | Model 3: Gradient Boosting | 1.281681 | 1.379898 | 1.902629 |
+| 2025/26 | Model 3: Gradient Boosting | 1.093013 | 1.468804 | 3.989194 |
 
 </div>
 
