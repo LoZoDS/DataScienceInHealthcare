@@ -1,7 +1,7 @@
 WP 4.2 – Exploratory Analysis
 ================
 S. Ryf (responsible), L. Zovkic (feedback)
-15 October 2026
+27 October 2026
 
 - [1 Data](#1-data)
 - [2 Seasonal patterns](#2-seasonal-patterns)
@@ -56,16 +56,16 @@ extent.
 
 ![](figures/02_fig-typical-1.png)<!-- -->
 
-| System                                   | Period          | Seasons | Weeks | Mean | Median | 90th pct. |   Max | % weeks = 0 |
-|:-----------------------------------------|:----------------|--------:|------:|-----:|-------:|----------:|------:|------------:|
-| Mandatory reporting (cases per 100,000)  | pre2020_partial |       1 |    39 | 0.90 |   0.01 |      3.45 |  4.82 |        35.9 |
-| Mandatory reporting (cases per 100,000)  | pre2020         |       7 |   365 | 1.99 |   0.07 |      7.94 | 24.39 |        15.9 |
-| Mandatory reporting (cases per 100,000)  | covid           |       2 |   105 | 1.35 |   0.03 |      2.94 | 18.23 |        22.9 |
-| Mandatory reporting (cases per 100,000)  | post2020        |       4 |   206 | 5.23 |   0.48 |     19.10 | 42.81 |         0.0 |
-| Sentinella (ILI per 1,000 consultations) | pre2020_partial |       1 |    39 | 9.91 |   0.70 |     35.76 | 58.20 |         0.0 |
-| Sentinella (ILI per 1,000 consultations) | pre2020         |       7 |   363 | 7.48 |   2.00 |     27.16 | 59.10 |         3.0 |
-| Sentinella (ILI per 1,000 consultations) | covid           |       2 |   105 | 8.39 |   6.80 |     15.06 | 20.70 |         0.0 |
-| Sentinella (ILI per 1,000 consultations) | post2020        |       4 |   206 | 9.39 |   5.70 |     21.95 | 48.60 |         0.0 |
+| System | Period | Seasons | Weeks | Mean | Median | 90th pct. | Max | % weeks = 0 |
+|:---|:---|---:|---:|---:|---:|---:|---:|---:|
+| Mandatory reporting (cases per 100,000) | pre2020_partial | 1 | 39 | 0.90 | 0.01 | 3.45 | 4.82 | 35.9 |
+| Mandatory reporting (cases per 100,000) | pre2020 | 7 | 365 | 1.99 | 0.07 | 7.94 | 24.39 | 15.9 |
+| Mandatory reporting (cases per 100,000) | covid | 2 | 105 | 1.35 | 0.03 | 2.94 | 18.23 | 22.9 |
+| Mandatory reporting (cases per 100,000) | post2020 | 4 | 206 | 5.23 | 0.48 | 19.10 | 42.81 | 0.0 |
+| Sentinella (ILI per 1,000 consultations) | pre2020_partial | 1 | 39 | 9.91 | 0.70 | 35.76 | 58.20 | 0.0 |
+| Sentinella (ILI per 1,000 consultations) | pre2020 | 7 | 363 | 7.48 | 2.00 | 27.16 | 59.10 | 3.0 |
+| Sentinella (ILI per 1,000 consultations) | covid | 2 | 105 | 8.39 | 6.80 | 15.06 | 20.70 | 0.0 |
+| Sentinella (ILI per 1,000 consultations) | post2020 | 4 | 206 | 9.39 | 5.70 | 21.95 | 48.60 | 0.0 |
 
 Weekly values per period
 
@@ -97,32 +97,32 @@ check the peak week is therefore also determined on ILI consultations
 per 100,000 inhabitants, which is not affected by the drop in total
 consultations.
 
-| Season  | Period          | Peak week (oblig) | Peak (cases/100k) | Peak week (Sentinella, per 1,000 cons.) | Peak (ILI/1,000) | Lag (weeks) | Peak week (Sentinella, per 100,000) | Lag (weeks, per 100,000) | Note                |
-|:--------|:----------------|:------------------|------------------:|:----------------------------------------|-----------------:|------------:|:------------------------------------|-------------------------:|:--------------------|
-| 2012/13 | pre2020_partial | 2013-W06          |               4.8 | 2013-W06                                |             58.2 |           0 | 2013-W06                            |                        0 | incomplete season   |
-| 2013/14 | pre2020         | 2014-W08          |               2.0 | 2014-W07                                |             18.0 |           1 | 2014-W07                            |                        1 |                     |
-| 2014/15 | pre2020         | 2015-W07          |              10.6 | 2015-W06                                |             52.1 |           1 | 2015-W06                            |                        1 |                     |
-| 2015/16 | pre2020         | 2016-W11          |               4.4 | 2016-W06                                |             39.0 |           5 | 2016-W06                            |                        5 |                     |
-| 2016/17 | pre2020         | 2017-W01          |              17.1 | 2017-W01                                |             57.0 |           0 | 2017-W02                            |                       -1 |                     |
-| 2017/18 | pre2020         | 2018-W01          |              16.3 | 2018-W01                                |             59.1 |           0 | 2018-W02                            |                       -1 |                     |
-| 2018/19 | pre2020         | 2019-W07          |              24.4 | 2019-W07                                |             40.8 |           0 | 2019-W06                            |                        1 |                     |
-| 2019/20 | pre2020         | 2020-W05          |              20.4 | 2020-W06                                |             43.6 |          -1 | 2020-W06                            |                       -1 |                     |
-| 2020/21 | covid           | 2020-W51          |               0.6 | 2020-W44                                |             17.3 |           7 | 2020-W44                            |                        7 | no influenza season |
-| 2021/22 | covid           | 2022-W12          |              18.2 | 2022-W11                                |             20.7 |           1 | 2022-W11                            |                        1 |                     |
-| 2022/23 | post2020        | 2022-W51          |              42.8 | 2022-W52                                |             46.1 |          -1 | 2022-W51                            |                        0 |                     |
-| 2023/24 | post2020        | 2024-W04          |              26.4 | 2023-W52                                |             23.7 |           4 | 2024-W05                            |                       -1 | test season         |
-| 2024/25 | post2020        | 2025-W05          |              34.0 | 2025-W06                                |             48.6 |          -1 | 2025-W06                            |                       -1 | test season         |
-| 2025/26 | post2020        | 2026-W01          |              36.5 | 2026-W01                                |             35.7 |           0 | 2026-W02                            |                       -1 | incomplete season   |
+| Season | Period | Peak week (oblig) | Peak (cases/100k) | Peak week (Sentinella, per 1,000 cons.) | Peak (ILI/1,000) | Lag (weeks) | Peak week (Sentinella, per 100,000) | Lag (weeks, per 100,000) | Note |
+|:---|:---|:---|---:|:---|---:|---:|:---|---:|:---|
+| 2012/13 | pre2020_partial | 2013-W06 | 4.8 | 2013-W06 | 58.2 | 0 | 2013-W06 | 0 | incomplete season |
+| 2013/14 | pre2020 | 2014-W08 | 2.0 | 2014-W07 | 18.0 | 1 | 2014-W07 | 1 |  |
+| 2014/15 | pre2020 | 2015-W07 | 10.6 | 2015-W06 | 52.1 | 1 | 2015-W06 | 1 |  |
+| 2015/16 | pre2020 | 2016-W11 | 4.4 | 2016-W06 | 39.0 | 5 | 2016-W06 | 5 |  |
+| 2016/17 | pre2020 | 2017-W01 | 17.1 | 2017-W01 | 57.0 | 0 | 2017-W02 | -1 |  |
+| 2017/18 | pre2020 | 2018-W01 | 16.3 | 2018-W01 | 59.1 | 0 | 2018-W02 | -1 |  |
+| 2018/19 | pre2020 | 2019-W07 | 24.4 | 2019-W07 | 40.8 | 0 | 2019-W06 | 1 |  |
+| 2019/20 | pre2020 | 2020-W05 | 20.4 | 2020-W06 | 43.6 | -1 | 2020-W06 | -1 |  |
+| 2020/21 | covid | 2020-W51 | 0.6 | 2020-W44 | 17.3 | 7 | 2020-W44 | 7 | no influenza season |
+| 2021/22 | covid | 2022-W12 | 18.2 | 2022-W11 | 20.7 | 1 | 2022-W11 | 1 |  |
+| 2022/23 | post2020 | 2022-W51 | 42.8 | 2022-W52 | 46.1 | -1 | 2022-W51 | 0 |  |
+| 2023/24 | post2020 | 2024-W04 | 26.4 | 2023-W52 | 23.7 | 4 | 2024-W05 | -1 | test season |
+| 2024/25 | post2020 | 2025-W05 | 34.0 | 2025-W06 | 48.6 | -1 | 2025-W06 | -1 | test season |
+| 2025/26 | post2020 | 2026-W01 | 36.5 | 2026-W01 | 35.7 | 0 | 2026-W02 | -1 | incomplete season |
 
 ![](figures/02_fig-peak-week-1.png)<!-- -->
 
 ![](figures/02_fig-peak-intensity-1.png)<!-- -->
 
-| Period   | Seasons | Mean peak week oblig (SD in weeks, range) | Mean peak week Sentinella (SD) | Median peak oblig | Median peak Sentinella | Mean lag in weeks (range) | Mean lag per 100,000 (range) |
-|:---------|--------:|:------------------------------------------|:-------------------------------|------------------:|-----------------------:|:--------------------------|:-----------------------------|
-| pre2020  |       7 | W06 (SD 3.9, W01 to W12)                  | W05 (SD 2.8)                   |              16.3 |                   43.6 | 0.9 (-1 to 5)             | 0.7 (-1 to 5)                |
-| covid    |       1 | W12 (SD NA, W12 to W12)                   | W11 (SD NA)                    |              18.2 |                   20.7 | 1.0 (1 to 1)              | 1.0 (1 to 1)                 |
-| post2020 |       4 | W02 (SD 2.8, W51 to W05)                  | W02 (SD 2.9)                   |              35.2 |                   40.9 | 0.5 (-1 to 4)             | -0.8 (-1 to 0)               |
+| Period | Seasons | Mean peak week oblig (SD in weeks, range) | Mean peak week Sentinella (SD) | Median peak oblig | Median peak Sentinella | Mean lag in weeks (range) | Mean lag per 100,000 (range) |
+|:---|---:|:---|:---|---:|---:|:---|:---|
+| pre2020 | 7 | W06 (SD 3.9, W01 to W12) | W05 (SD 2.8) | 16.3 | 43.6 | 0.9 (-1 to 5) | 0.7 (-1 to 5) |
+| covid | 1 | W12 (SD NA, W12 to W12) | W11 (SD NA) | 18.2 | 20.7 | 1.0 (1 to 1) | 1.0 (1 to 1) |
+| post2020 | 4 | W02 (SD 2.8, W51 to W05) | W02 (SD 2.9) | 35.2 | 40.9 | 0.5 (-1 to 4) | -0.8 (-1 to 0) |
 
 Peak timing and intensity by period (seasons in summary statistics only)
 
@@ -173,29 +173,29 @@ onset rule reproduces the onset week reported by FOPH/BAG in 4 of 5
 seasons; the prospective MEM thresholds reproduce it in both seasons
 where they are available (2018/19, 2019/20).
 
-| Season  | FOPH/BAG threshold | MEM (prospective) | MEM (all pre-2020) | Onset reported by FOPH/BAG | Onset with FOPH/BAG threshold | Onset with MEM (prospective) | Onset with MEM (all pre-2020) |
-|:--------|-------------------:|------------------:|-------------------:|:---------------------------|:------------------------------|:-----------------------------|:------------------------------|
-| 2013/14 |                 74 |                NA |               71.2 | 2014-W04                   | 2014-W05                      | NA                           | 2014-W04                      |
-| 2014/15 |                 70 |                NA |               71.2 | NA                         | 2015-W02                      | NA                           | 2015-W02                      |
-| 2015/16 |                 NA |                NA |               71.2 | NA                         | NA                            | NA                           | 2016-W02                      |
-| 2016/17 |                 64 |                NA |               71.2 | 2016-W50                   | 2016-W50                      | NA                           | 2016-W51                      |
-| 2017/18 |                 68 |                NA |               71.2 | 2017-W51                   | 2017-W51                      | NA                           | 2017-W51                      |
-| 2018/19 |                 68 |              65.7 |               71.2 | 2019-W02                   | 2019-W02                      | 2019-W02                     | 2019-W02                      |
-| 2019/20 |                 69 |              69.2 |               71.2 | 2020-W02                   | 2020-W02                      | 2020-W02                     | 2020-W02                      |
+| Season | FOPH/BAG threshold | MEM (prospective) | MEM (all pre-2020) | Onset reported by FOPH/BAG | Onset with FOPH/BAG threshold | Onset with MEM (prospective) | Onset with MEM (all pre-2020) |
+|:---|---:|---:|---:|:---|:---|:---|:---|
+| 2013/14 | 74 | NA | 71.2 | 2014-W04 | 2014-W05 | NA | 2014-W04 |
+| 2014/15 | 70 | NA | 71.2 | NA | 2015-W02 | NA | 2015-W02 |
+| 2015/16 | NA | NA | 71.2 | NA | NA | NA | 2016-W02 |
+| 2016/17 | 64 | NA | 71.2 | 2016-W50 | 2016-W50 | NA | 2016-W51 |
+| 2017/18 | 68 | NA | 71.2 | 2017-W51 | 2017-W51 | NA | 2017-W51 |
+| 2018/19 | 68 | 65.7 | 71.2 | 2019-W02 | 2019-W02 | 2019-W02 | 2019-W02 |
+| 2019/20 | 69 | 69.2 | 71.2 | 2020-W02 | 2020-W02 | 2020-W02 | 2020-W02 |
 
 Thresholds per 100,000 inhabitants and resulting onset weeks, pre-2020
 seasons
 
-| Season  | MEM threshold | Onset    | End      | Duration (weeks) | Peak Sentinella | Peak oblig | Oblig cases in window |
-|:--------|--------------:|:---------|:---------|-----------------:|:----------------|:-----------|:----------------------|
-| 2018/19 |          65.7 | 2019-W02 | 2019-W12 |               11 | 2019-W07        | 2019-W07   | 89%                   |
-| 2019/20 |          69.2 | 2020-W02 | 2020-W14 |               13 | 2020-W06        | 2020-W05   | 93%                   |
-| 2020/21 |          71.2 | 2020-W43 | 2020-W51 |                9 | 2020-W44        | 2020-W51   | 58%                   |
-| 2021/22 |          71.2 | 2021-W47 | 2022-W15 |               21 | 2022-W11        | 2022-W12   | 89%                   |
-| 2022/23 |          71.2 | 2022-W48 | 2023-W12 |               17 | 2022-W52        | 2022-W51   | 92%                   |
-| 2023/24 |          73.1 | 2023-W47 | 2024-W08 |               14 | 2023-W52        | 2024-W04   | 86%                   |
-| 2024/25 |          79.1 | 2025-W01 | 2025-W11 |               11 | 2025-W06        | 2025-W05   | 80%                   |
-| 2025/26 |          82.8 | 2025-W49 | 2026-W06 |               10 | 2026-W01        | 2026-W01   | 86%                   |
+| Season | MEM threshold | Onset | End | Duration (weeks) | Peak Sentinella | Peak oblig | Oblig cases in window |
+|:---|---:|:---|:---|---:|:---|:---|:---|
+| 2018/19 | 65.7 | 2019-W02 | 2019-W12 | 11 | 2019-W07 | 2019-W07 | 89% |
+| 2019/20 | 69.2 | 2020-W02 | 2020-W14 | 13 | 2020-W06 | 2020-W05 | 93% |
+| 2020/21 | 71.2 | 2020-W43 | 2020-W51 | 9 | 2020-W44 | 2020-W51 | 58% |
+| 2021/22 | 71.2 | 2021-W47 | 2022-W15 | 21 | 2022-W11 | 2022-W12 | 89% |
+| 2022/23 | 71.2 | 2022-W48 | 2023-W12 | 17 | 2022-W52 | 2022-W51 | 92% |
+| 2023/24 | 73.1 | 2023-W47 | 2024-W08 | 14 | 2023-W52 | 2024-W04 | 86% |
+| 2024/25 | 79.1 | 2025-W01 | 2025-W11 | 11 | 2025-W06 | 2025-W05 | 80% |
+| 2025/26 | 82.8 | 2025-W49 | 2026-W06 | 10 | 2026-W01 | 2026-W01 | 86% |
 
 Season boundaries from Sentinella (MEM), applied to mandatory reporting
 
@@ -221,29 +221,29 @@ pre-2020 seasons (71.2 per 100,000). These descriptive boundaries are
 used only for RQ1; the in-season weeks for WP 4.5 remain the prospective
 ones above.
 
-| Season  | Threshold                                | Threshold (per 100,000) | Onset    | End      | Duration (weeks) |
-|:--------|:-----------------------------------------|------------------------:|:---------|:---------|-----------------:|
-| 2013/14 | MEM retrospective (all pre-2020 seasons) |                    71.2 | 2014-W04 | 2014-W10 |                7 |
-| 2014/15 | MEM retrospective (all pre-2020 seasons) |                    71.2 | 2015-W02 | 2015-W12 |               11 |
-| 2015/16 | MEM retrospective (all pre-2020 seasons) |                    71.2 | 2016-W02 | 2016-W13 |               12 |
-| 2016/17 | MEM retrospective (all pre-2020 seasons) |                    71.2 | 2016-W51 | 2017-W08 |               10 |
-| 2017/18 | MEM retrospective (all pre-2020 seasons) |                    71.2 | 2017-W51 | 2018-W13 |               15 |
-| 2018/19 | MEM prospective (earlier seasons only)   |                    65.7 | 2019-W02 | 2019-W12 |               11 |
-| 2019/20 | MEM prospective (earlier seasons only)   |                    69.2 | 2020-W02 | 2020-W14 |               13 |
-| 2020/21 | MEM prospective (earlier seasons only)   |                    71.2 | 2020-W43 | 2020-W51 |                9 |
-| 2021/22 | MEM prospective (earlier seasons only)   |                    71.2 | 2021-W47 | 2022-W15 |               21 |
-| 2022/23 | MEM prospective (earlier seasons only)   |                    71.2 | 2022-W48 | 2023-W12 |               17 |
-| 2023/24 | MEM prospective (earlier seasons only)   |                    73.1 | 2023-W47 | 2024-W08 |               14 |
-| 2024/25 | MEM prospective (earlier seasons only)   |                    79.1 | 2025-W01 | 2025-W11 |               11 |
-| 2025/26 | MEM prospective (earlier seasons only)   |                    82.8 | 2025-W49 | 2026-W06 |               10 |
+| Season | Threshold | Threshold (per 100,000) | Onset | End | Duration (weeks) |
+|:---|:---|---:|:---|:---|---:|
+| 2013/14 | MEM retrospective (all pre-2020 seasons) | 71.2 | 2014-W04 | 2014-W10 | 7 |
+| 2014/15 | MEM retrospective (all pre-2020 seasons) | 71.2 | 2015-W02 | 2015-W12 | 11 |
+| 2015/16 | MEM retrospective (all pre-2020 seasons) | 71.2 | 2016-W02 | 2016-W13 | 12 |
+| 2016/17 | MEM retrospective (all pre-2020 seasons) | 71.2 | 2016-W51 | 2017-W08 | 10 |
+| 2017/18 | MEM retrospective (all pre-2020 seasons) | 71.2 | 2017-W51 | 2018-W13 | 15 |
+| 2018/19 | MEM prospective (earlier seasons only) | 65.7 | 2019-W02 | 2019-W12 | 11 |
+| 2019/20 | MEM prospective (earlier seasons only) | 69.2 | 2020-W02 | 2020-W14 | 13 |
+| 2020/21 | MEM prospective (earlier seasons only) | 71.2 | 2020-W43 | 2020-W51 | 9 |
+| 2021/22 | MEM prospective (earlier seasons only) | 71.2 | 2021-W47 | 2022-W15 | 21 |
+| 2022/23 | MEM prospective (earlier seasons only) | 71.2 | 2022-W48 | 2023-W12 | 17 |
+| 2023/24 | MEM prospective (earlier seasons only) | 73.1 | 2023-W47 | 2024-W08 | 14 |
+| 2024/25 | MEM prospective (earlier seasons only) | 79.1 | 2025-W01 | 2025-W11 | 11 |
+| 2025/26 | MEM prospective (earlier seasons only) | 82.8 | 2025-W49 | 2026-W06 | 10 |
 
 Season boundaries for RQ1 (all seasons)
 
-| Period   | Seasons | Mean onset (SD, range)         | Mean end | Mean duration in weeks (range) |
-|:---------|--------:|:-------------------------------|:---------|:-------------------------------|
-| pre2020  |       7 | W02 (SD 1.9 weeks, W51 to W04) | W12      | 11.3 (7 to 15)                 |
-| covid    |       1 | W47                            | W15      | 21.0 (21 to 21)                |
-| post2020 |       4 | W49 (SD 2.6 weeks, W47 to W01) | W09      | 13.0 (10 to 17)                |
+| Period | Seasons | Mean onset (SD, range) | Mean end | Mean duration in weeks (range) |
+|:---|---:|:---|:---|:---|
+| pre2020 | 7 | W02 (SD 1.9 weeks, W51 to W04) | W12 | 11.3 (7 to 15) |
+| covid | 1 | W47 | W15 | 21.0 (21 to 21) |
+| post2020 | 4 | W49 (SD 2.6 weeks, W47 to W01) | W09 | 13.0 (10 to 17) |
 
 Season onset, end and duration by period (seasons in summary statistics)
 
@@ -322,14 +322,14 @@ peak (per 100’000 inhabitants) came before (negative) or after
 
 ![](figures/02_fig-regions-1.png)<!-- -->
 
-| Region                                | Seasons | Median difference (weeks) | Earlier | Same week | Later | Median peak (ILI per 100,000) |
-|:--------------------------------------|--------:|--------------------------:|--------:|----------:|------:|------------------------------:|
-| Region 1 (GE, NE, VD, VS)             |      12 |                         0 |       2 |         5 |     5 |                           290 |
-| Region 2 (BE, FR, JU)                 |      12 |                         0 |       3 |         6 |     3 |                           259 |
-| Region 3 (AG, BL, BS, SO)             |      12 |                         1 |       0 |         5 |     7 |                           314 |
-| Region 4 (LU, NW, OW, SZ, UR, ZG)     |      12 |                         0 |       4 |         3 |     5 |                           202 |
-| Region 5 (AI, AR, GL, SG, SH, TG, ZH) |      12 |                         0 |       2 |         6 |     4 |                           281 |
-| Region 6 (GR, TI)                     |      12 |                         0 |       5 |         6 |     1 |                           664 |
+| Region | Seasons | Median difference (weeks) | Earlier | Same week | Later | Median peak (ILI per 100,000) |
+|:---|---:|---:|---:|---:|---:|---:|
+| Region 1 (GE, NE, VD, VS) | 12 | 0 | 2 | 5 | 5 | 290 |
+| Region 2 (BE, FR, JU) | 12 | 0 | 3 | 6 | 3 | 259 |
+| Region 3 (AG, BL, BS, SO) | 12 | 1 | 0 | 5 | 7 | 314 |
+| Region 4 (LU, NW, OW, SZ, UR, ZG) | 12 | 0 | 4 | 3 | 5 | 202 |
+| Region 5 (AI, AR, GL, SG, SH, TG, ZH) | 12 | 0 | 2 | 6 | 4 | 281 |
+| Region 6 (GR, TI) | 12 | 0 | 5 | 6 | 1 | 664 |
 
 Regional peaks relative to the national peak (seasons in summary
 statistics)

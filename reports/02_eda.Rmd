@@ -200,7 +200,7 @@ peaks |>
   scale_colour_manual(values = COL_SYSTEM, name = NULL) +
   scale_shape_manual(values = c(16, 17), name = NULL) +
   scale_x_continuous(breaks = sw_breaks, labels = season_week_label(sw_breaks)) +
-  labs(x = "Peak week", y = NULL, title = "Peak week per season") +
+  labs(x = "Peak week (calendar week)", y = "Season", title = "Peak week per season") +
   theme(legend.position = "top", panel.grid.major.y = element_line(colour = "grey95"))
 ```
 
@@ -330,7 +330,7 @@ national |>
   geom_line(colour = COL_SENT, linewidth = 0.6) +
   facet_wrap(~ season, ncol = 2) +
   scale_x_continuous(breaks = sw_breaks, labels = season_week_label(sw_breaks)) +
-  labs(x = NULL, y = "ILI consultations per 100,000",
+  labs(x = "Calendar week (season W40–W39)", y = "ILI consultations per 100,000",
        title = "Season window per season (Sentinella, MEM threshold)",
        subtitle = "Dashed: MEM threshold from earlier seasons. Grey: onset to end")
 ```
